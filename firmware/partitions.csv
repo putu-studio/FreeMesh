@@ -1,0 +1,10 @@
+# FreeMesh box: 3 programs + their own storage (8 MB). The copy inside the MeshCore patch must match this file.
+# Name,     Type, SubType, Offset,   Size
+nvs,        data, nvs,     0x9000,   0x6000
+otadata,    data, ota,     0xf000,   0x2000
+phy_init,   data, phy,     0x11000,  0x1000
+freemesh,   app,  ota_0,   0x20000,  0x200000
+meshtastic, app,  ota_1,   0x220000, 0x280000
+meshcore,   app,  ota_2,   0x4A0000, 0x200000
+mtfs,       data, spiffs,  0x6A0000, 0xB0000
+mcfs,       data, spiffs,  0x750000, 0xB0000

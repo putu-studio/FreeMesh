@@ -1,0 +1,85 @@
+diff --git a/examples/companion_radio/main.cpp b/examples/companion_radio/main.cpp
+index 839d495..23e800c 100644
+--- a/examples/companion_radio/main.cpp
++++ b/examples/companion_radio/main.cpp
+@@ -178,7 +178,11 @@ void setup() {
+   store.begin();
+   the_mesh.begin();
+ #elif defined(ESP32)
++#ifdef FREEMESH
++  SPIFFS.begin(true, "/spiffs", 10, "mcfs");   // FreeMesh box: own storage area, not shared with Meshtastic
++#else
+   SPIFFS.begin(true);
++#endif
+   store.begin();
+   the_mesh.begin();
+ #else
+@@ -289,7 +293,35 @@ void setup() {
+   board.onBootComplete();
+ }
+ 
++#ifdef FREEMESH
++// FreeMesh box: hold the mode button (XIAO D1 = GPIO2, to GND) 5 s = restart in FreeMesh
++#include <esp_ota_ops.h>
++#include <esp_partition.h>
++static void freemeshReturnPoll() {
++  static bool init = false;
++  static uint32_t last = 0, down_at = 0;
++  if (!init) { pinMode(2, INPUT_PULLUP); pinMode(48, OUTPUT); digitalWrite(48, LOW); init = true; }   // LED 48 off
++  uint32_t now = millis();
++  if (now - last < 20) return;
++  last = now;
++  if (digitalRead(2) != LOW) { if (down_at) digitalWrite(48, LOW); down_at = 0; return; }
++  if (down_at == 0) down_at = now ? now : 1;
++  if (now - down_at >= 500) digitalWrite(48, (now / 100) % 2);   // holding: fast pulse
++  if (now - down_at < 5000) return;
++  const esp_partition_t *p = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "freemesh");
++  if (p && esp_ota_set_boot_partition(p) == ESP_OK) {
++    for (int i = 0; i < 8; i++) { digitalWrite(48, i % 2 == 0); delay(100); }   // switching
++    digitalWrite(48, HIGH); esp_restart();
++  }
++  digitalWrite(48, LOW);
++  down_at = 0;
++}
++#endif
++
+ void loop() {
++#ifdef FREEMESH
++  freemeshReturnPoll();
++#endif
+   the_mesh.loop();
+   interface_manager.loop();
+   sensors.loop();
+diff --git a/freemesh_8MB.csv b/freemesh_8MB.csv
+new file mode 100644
+index 0000000..2c1720f
+--- /dev/null
++++ b/freemesh_8MB.csv
+@@ -0,0 +1,10 @@
++# FreeMesh box: 3 programs + their own storage (8 MB). Must match FreeMesh's partitions.csv
++# Name,     Type, SubType, Offset,   Size
++nvs,        data, nvs,     0x9000,   0x6000
++otadata,    data, ota,     0xf000,   0x2000
++phy_init,   data, phy,     0x11000,  0x1000
++freemesh,   app,  ota_0,   0x20000,  0x200000
++meshtastic, app,  ota_1,   0x220000, 0x280000
++meshcore,   app,  ota_2,   0x4A0000, 0x200000
++mtfs,       data, spiffs,  0x6A0000, 0xB0000
++mcfs,       data, spiffs,  0x750000, 0xB0000
+diff --git a/variants/xiao_s3_wio/platformio.ini b/variants/xiao_s3_wio/platformio.ini
+index 5a2ef10..e9af468 100644
+--- a/variants/xiao_s3_wio/platformio.ini
++++ b/variants/xiao_s3_wio/platformio.ini
+@@ -244,3 +244,12 @@ lib_deps =
+ extends = Xiao_S3_WIO
+ build_src_filter = ${Xiao_S3_WIO.build_src_filter}
+   +<../examples/kiss_modem/>
++
++; FreeMesh box build: own storage "mcfs", hold D1 5 s = back to FreeMesh (companion has no OTA)
++[env:FreeMesh_Xiao_S3_WIO_companion_radio_ble]
++extends = env:Xiao_S3_WIO_companion_radio_ble
++board_build.partitions = freemesh_8MB.csv
++build_unflags = -D PIN_STATUS_LED=48   ; FreeMesh box: no status blinking, the LED only pulses while switching modes
++build_flags =
++  ${env:Xiao_S3_WIO_companion_radio_ble.build_flags}
++  -D FREEMESH

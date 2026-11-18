@@ -1,0 +1,165 @@
+diff --git a/freemesh_build_mt.csv b/freemesh_build_mt.csv
+new file mode 100644
+index 0000000..e3dfc64
+--- /dev/null
++++ b/freemesh_build_mt.csv
+@@ -0,0 +1,8 @@
++# Only used to BUILD Meshtastic for the FreeMesh box: its size check looks at the first app slot.
++# The box itself uses FreeMesh's partitions.csv (same as freemesh_8MB.csv).
++nvs,        data, nvs,     0x9000,   0x6000
++otadata,    data, ota,     0xf000,   0x2000
++phy_init,   data, phy,     0x11000,  0x1000
++meshtastic, app,  ota_0,   0x20000,  0x280000
++mtfs,       data, spiffs,  0x6A0000, 0xB0000
++mcfs,       data, spiffs,  0x750000, 0xB0000
+diff --git a/src/FSCommon.h b/src/FSCommon.h
+index de43225..c3f76d3 100644
+--- a/src/FSCommon.h
++++ b/src/FSCommon.h
+@@ -35,7 +35,11 @@ using namespace STM32_LittleFS_Namespace;
+ // ESP32 version
+ #include "LittleFS.h"
+ #define FSCom LittleFS
++#ifdef FREEMESH
++#define FSBegin() FSCom.begin(true, "/littlefs", 10, "mtfs") // FreeMesh box: own storage area, not shared with MeshCore
++#else
+ #define FSBegin() FSCom.begin(true) // format on failure
++#endif
+ #define FILE_O_WRITE "w"
+ #define FILE_O_READ "r"
+ #endif
+diff --git a/src/main.cpp b/src/main.cpp
+index 978149e..ec08852 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1413,9 +1413,16 @@ void scannerToSensorsMap(const std::unique_ptr<ScanI2CTwoWire> &i2cScanner, Scan
+ #endif
+ 
+ #ifndef PIO_UNIT_TESTING
++#ifdef FREEMESH
++#include "platform/esp32/FreeMeshReturn.h"
++#endif
++
+ void loop()
+ {
+     runASAP = false;
++#ifdef FREEMESH
++    freemeshReturnPoll();
++#endif
+ 
+     // The single writer of the monotonic wrap carry; every other caller only reads it.
+     Time::serviceMonotonic();
+diff --git a/src/modules/StatusLEDModule.cpp b/src/modules/StatusLEDModule.cpp
+index 3a09fb8..9a5ae8b 100644
+--- a/src/modules/StatusLEDModule.cpp
++++ b/src/modules/StatusLEDModule.cpp
+@@ -217,7 +217,7 @@ int32_t StatusLEDModule::runOnce()
+     io.digitalWrite(PCA_LED_ENABLE, CHARGE_LED_state);
+ #endif
+ 
+-#ifdef LED_POWER
++#if defined(LED_POWER) && !defined(FREEMESH) // FreeMesh box: LED only while switching modes
+ #ifdef LED_POWER_CRITICAL
+     if (LED_POWER != LED_POWER_CRITICAL) {
+         if (power_state == critical) {
+@@ -301,7 +301,7 @@ void StatusLEDModule::setPowerLED(bool LEDon)
+ #ifdef PCA_LED_ENABLE
+     io.digitalWrite(PCA_LED_ENABLE, ledState);
+ #endif
+-#ifdef LED_POWER
++#if defined(LED_POWER) && !defined(FREEMESH)
+     digitalWrite(LED_POWER, ledState);
+ #endif
+ #ifdef LED_PAIRING
+diff --git a/src/platform/esp32/FreeMeshReturn.cpp b/src/platform/esp32/FreeMeshReturn.cpp
+new file mode 100644
+index 0000000..2516f62
+--- /dev/null
++++ b/src/platform/esp32/FreeMeshReturn.cpp
+@@ -0,0 +1,47 @@
++#ifdef FREEMESH
++// FreeMesh box: hold the mode button (XIAO D1 = GPIO2, to GND) for 5 s and the box restarts in FreeMesh.
++// Called from loop(). Polls every 20 ms, so a bump does nothing.
++#include "FreeMeshReturn.h"
++#include <Arduino.h>
++#include <esp_ota_ops.h>
++#include <esp_partition.h>
++
++#define FREEMESH_BTN 2
++#define FREEMESH_HOLD_MS 5000
++#define FREEMESH_LED 48     // on = HIGH. Off all the time, pulses while you hold the button
++
++void freemeshReturnPoll()
++{
++    static bool init = false;
++    static uint32_t last = 0, down_at = 0;
++    if (!init) {
++        pinMode(FREEMESH_BTN, INPUT_PULLUP);
++        pinMode(FREEMESH_LED, OUTPUT);
++        digitalWrite(FREEMESH_LED, LOW);
++        init = true;
++    }
++    uint32_t now = millis();
++    if (now - last < 20)
++        return;
++    last = now;
++    if (digitalRead(FREEMESH_BTN) != LOW) {
++        if (down_at) digitalWrite(FREEMESH_LED, LOW);   // let go: LED off
++        down_at = 0;
++        return;
++    }
++    if (down_at == 0)
++        down_at = now ? now : 1;
++    if (now - down_at >= 500) digitalWrite(FREEMESH_LED, (now / 100) % 2);   // holding: fast pulse
++    if (now - down_at < FREEMESH_HOLD_MS)
++        return;
++    const esp_partition_t *p = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "freemesh");
++    if (p && esp_ota_set_boot_partition(p) == ESP_OK) {
++        Serial.println("FreeMesh button: switching back to FreeMesh");
++        for (int i = 0; i < 8; i++) { digitalWrite(FREEMESH_LED, i % 2 == 0); delay(100); }   // switching
++        digitalWrite(FREEMESH_LED, HIGH);
++        esp_restart();
++    }
++    digitalWrite(FREEMESH_LED, LOW);
++    down_at = 0; // no freemesh slot: try again on the next hold
++}
++#endif
+diff --git a/src/platform/esp32/FreeMeshReturn.h b/src/platform/esp32/FreeMeshReturn.h
+new file mode 100644
+index 0000000..597c558
+--- /dev/null
++++ b/src/platform/esp32/FreeMeshReturn.h
+@@ -0,0 +1,3 @@
++#pragma once
++// FreeMesh box: hold the mode button (D1) 5 s to go back to FreeMesh.
++void freemeshReturnPoll();
+diff --git a/src/platform/esp32/MeshtasticOTA.cpp b/src/platform/esp32/MeshtasticOTA.cpp
+index ce59188..76c1d11 100644
+--- a/src/platform/esp32/MeshtasticOTA.cpp
++++ b/src/platform/esp32/MeshtasticOTA.cpp
+@@ -66,6 +66,9 @@ void saveConfig(meshtastic_Config_NetworkConfig *network, meshtastic_OTAMode met
+ 
+ const esp_partition_t *getAppPartition()
+ {
++#ifdef FREEMESH
++    return NULL; // FreeMesh box: phone-app updates are off, they would break the 3-mode flash layout
++#endif
+     return esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_1, NULL);
+ }
+ 
+diff --git a/variants/esp32s3/seeed_xiao_s3/platformio.ini b/variants/esp32s3/seeed_xiao_s3/platformio.ini
+index 140f766..c2b45b1 100644
+--- a/variants/esp32s3/seeed_xiao_s3/platformio.ini
++++ b/variants/esp32s3/seeed_xiao_s3/platformio.ini
+@@ -21,3 +21,11 @@ build_flags =
+   -D SEEED_XIAO_S3
+   -I variants/esp32s3/seeed_xiao_s3
+   -DBOARD_HAS_PSRAM 
++
++; FreeMesh box build: own storage "mtfs", phone-app updates off, hold D1 5 s = back to FreeMesh
++[env:freemesh-xiao-s3]
++extends = env:seeed-xiao-s3
++board_build.partitions = freemesh_build_mt.csv   ; size check = our 2.5 MB meshtastic slot
++build_flags =
++  ${env:seeed-xiao-s3.build_flags}
++  -D FREEMESH

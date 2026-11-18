@@ -1,0 +1,1624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF7F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+<title>FreeMesh</title>
+<style>
+  /* Text follows the text size set on the phone (Settings > Display > Text size), for people who need
+     larger text. Every font size below is in rem, a multiple of the phone's normal text size. iPhone and
+     iPad pass their size on only through -apple-system-body; other browsers ignore that line and use 100%. */
+  html { font-size: 100%; }
+  @supports (font: -apple-system-body) { html { font: -apple-system-body; } }
+  /* ---------- Colors and icons ---------- */
+  /* The color pairs are checked for contrast (WCAG 2.x). */
+  :root {
+    --bg:#FAF7F2; --card:#FFFDF9; --soft:#F0ECE4; --text:#1C1A17; --muted:#5B554C;
+    --line:#E3DDD2; --edge:#8C8478; --accent:#0F766E; --on-accent:#FFFFFF;
+    --me:#115E59; --me-text:#FFFFFF; --them:#F0ECE4;
+    --ok:#166534; --warn:#92400E; --sos:#B91C1C; --sos-bg:#B91C1C; --on-sos:#FFFFFF;
+    --shade:rgba(0,0,0,.45);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#121212; --card:#1E1E1E; --soft:#2A2A2A; --text:#F2F2F2; --muted:#A8A8A8;
+      --line:#333333; --edge:#757575; --accent:#2DD4BF; --on-accent:#04201D;
+      --me:#115E59; --me-text:#FFFFFF; --them:#2A2A2A;
+      --ok:#4ADE80; --warn:#FBBF24; --sos:#F87171; --sos-bg:#DC2626; --on-sos:#FFFFFF;
+      --shade:rgba(0,0,0,.6);
+    }
+  }
+  /* One rule styles every icon: <svg class="i"><use href="#i-name"/></svg>. */
+  .i { width:1.5em; height:1.5em; fill:none; stroke:currentColor; stroke-width:2;
+    stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; vertical-align:middle; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden;
+    font: 1rem/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  button { font: inherit; color: inherit; }
+
+  /* ---------- Screens: one shows at a time, like an app ---------- */
+  .view { position: fixed; inset: 0; display: none; flex-direction: column; background: var(--bg); }
+  .view.show { display: flex; }
+  .view.in { animation: slide .18s ease-out; }
+  @keyframes slide { from { transform: translateX(30%); opacity: .4; } }
+  .scroll { flex: 1; overflow-y: auto; }
+
+  /* ---------- Top bar ---------- */
+  .bar { display: flex; align-items: center; gap: 6px; padding: 8px 8px; min-height: 56px;
+    padding-top: max(8px, env(safe-area-inset-top)); background: var(--card); border-bottom: 1px solid var(--line); flex-shrink: 0; }
+  .bar .title { flex: 1; min-width: 0; }
+  .bar h1 { font-size: 1.25rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar h2 { font-size: 1rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar small { color: var(--muted); font-size: 0.75rem; display: flex; align-items: center; gap: 5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .icon { width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; font-size: 1.25rem;
+    cursor: pointer; flex-shrink: 0; display: grid; place-items: center; }
+  .icon:active { background: var(--soft); }
+  .icon.round { background: var(--soft); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sos); flex-shrink: 0; }
+  .batt { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; color: var(--muted); margin-right: 8px; flex-shrink: 0; }
+  .batt.low { color: var(--sos); font-weight: 600; }
+  .dot.on { background: var(--ok); }
+
+  /* ---------- Round pictures (initials) ---------- */
+  .av { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0;
+    color: #fff; font-weight: 700; font-size: 1.125rem; position: relative; }
+  .av.sm { width: 36px; height: 36px; font-size: 0.9375rem; }
+  .av .live { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--ok); border: 2px solid var(--card); }
+
+  /* ---------- Signal bars ---------- */
+  .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+  .bars i { width: 3px; background: var(--line); border-radius: 1px; }
+  .bars i:nth-child(1) { height: 25%; } .bars i:nth-child(2) { height: 50%; }
+  .bars i:nth-child(3) { height: 75%; } .bars i:nth-child(4) { height: 100%; }
+  .bars i.on { background: var(--ok); }
+  .bars.weak i.on { background: var(--warn); }
+
+  /* ---------- Home: boxes nearby and chat list ---------- */
+  #nearby { display: flex; gap: 14px; padding: 12px 14px 4px; overflow-x: auto; scrollbar-width: none; }
+  #nearby::-webkit-scrollbar { display: none; }
+  .near { width: 64px; flex-shrink: 0; text-align: center; cursor: pointer; border: 0; background: none; padding: 0; }
+  .near .av { margin: 0 auto; }
+  .near span { display: block; font-size: 0.75rem; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .banner { margin: 8px 12px 0; padding: 10px 14px; border-radius: 12px; background: var(--soft);
+    display: flex; align-items: center; gap: 10px; cursor: pointer; border: 0; width: calc(100% - 24px); text-align: left; }
+  .banner b { color: var(--accent); }
+  .crow { display: flex; align-items: center; gap: 12px; padding: 8px 14px; cursor: pointer; width: 100%;
+    border: 0; background: none; text-align: left; }
+  .crow:active { background: var(--soft); }
+  .crow, .bubble { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }   /* A long press opens the page's own menu, not the phone's. */
+  .showHidden { display: block; margin: 10px auto; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
+  .crow .mid { flex: 1; min-width: 0; }
+  .crow .name { font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .crow .last { font-size: 0.875rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .crow.new .name, .crow.new .last { font-weight: 700; color: var(--text); }
+  .crow .side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .crow .time { font-size: 0.75rem; color: var(--muted); }
+  .badge { min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--accent); color: var(--on-accent);
+    font-size: 0.75rem; line-height: 20px; text-align: center; font-weight: 700; }
+  .sec { font-size: 0.8125rem; color: var(--muted); font-weight: 600; margin: 16px 16px 4px; }
+  .empty { text-align: center; color: var(--muted); padding: 32px 24px; }
+
+  /* ---------- One chat ---------- */
+  #list { flex: 1; overflow-y: auto; padding: 12px 12px 4px; display: flex; flex-direction: column; gap: 4px; }
+  #list .empty { margin: auto; }
+  .row { display: flex; flex-direction: column; max-width: 80%; }
+  .row.me { align-self: flex-end; align-items: flex-end; }
+  .row.pending { opacity: .55; }           /* Sent, but the box has not answered yet. */
+  .row.them { align-self: flex-start; align-items: flex-start; }
+  .who { font-size: 0.75rem; color: var(--muted); margin: 8px 10px 2px; }
+  .bubble { padding: 8px 12px; border-radius: 18px; background: var(--them); white-space: pre-wrap; word-wrap: break-word; }
+  .me .bubble { background: var(--me); color: var(--me-text); border-bottom-right-radius: 6px; }
+  .them .bubble { border-bottom-left-radius: 6px; }
+  .meta { font-size: 0.6875rem; color: var(--muted); margin: 2px 10px 0; }
+  .play { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0; }
+  form.compose { display: flex; gap: 8px; padding: 8px 10px; padding-bottom: max(8px, env(safe-area-inset-bottom));
+    background: var(--card); border-top: 1px solid var(--line); align-items: center; flex-shrink: 0; }
+  .quick { display: flex; gap: 6px; overflow-x: auto; padding: 8px 10px 0; background: var(--card); border-top: 1px solid var(--line);
+    flex-shrink: 0; scrollbar-width: none; }
+  .quick::-webkit-scrollbar { display: none; }
+  .quick button { flex: none; border: 1px solid var(--line); background: var(--soft); color: var(--text); border-radius: 16px;
+    padding: 8px 12px; font-size: 0.9375rem; cursor: pointer; white-space: nowrap; }
+  .quick button.edit { background: none; color: var(--muted); }
+  .quick + form.compose { border-top: 0; }
+  .compose input { flex: 1; min-width: 0; border: 0; background: var(--soft); color: var(--text);
+    border-radius: 22px; padding: 10px 16px; font-size: 1rem; outline: none; }
+  .send { width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 1.25rem; cursor: pointer; flex-shrink: 0; }
+  .send:disabled { opacity: .4; }
+  .mic { width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--soft); font-size: 1.25rem; cursor: pointer;
+    touch-action: none; user-select: none; -webkit-user-select: none; flex-shrink: 0; }
+  .mic.rec { background: var(--sos-bg); color: var(--on-sos); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .6; } }
+  .count { font-size: 0.6875rem; color: var(--muted); min-width: 28px; text-align: right; }
+  .count:empty { display: none; }
+  .count.full { color: var(--sos); font-weight: 600; }
+
+  /* ---------- Side menu ---------- */
+  #shade { position: fixed; inset: 0; background: var(--shade); display: none; z-index: 5; }
+  #drawer { position: fixed; top: 0; bottom: 0; left: 0; width: min(310px, 84vw); background: var(--card); z-index: 6;
+    transform: translateX(-102%); transition: transform .2s ease-out; display: flex; flex-direction: column;
+    padding-top: env(safe-area-inset-top); }
+  body.menu #drawer { transform: none; box-shadow: 2px 0 16px rgba(0,0,0,.25); }
+  body.menu #shade { display: block; }
+  .me-card { display: flex; align-items: center; gap: 12px; padding: 20px 16px; border-bottom: 1px solid var(--line); }
+  .me-card b { display: block; font-size: 1.0625rem; }
+  .me-card small { color: var(--muted); }
+  .mitem { display: flex; align-items: center; gap: 14px; width: 100%; padding: 13px 18px; border: 0; background: none;
+    font-size: 1rem; text-align: left; cursor: pointer; }
+  .mitem:active { background: var(--soft); }
+  .mitem .ic { display: flex; color: var(--accent); }
+  .icon .i, .send .i, .mic .i, .mitem .i { width: 1.5rem; height: 1.5rem; }
+  .av .i { width: 55%; height: 55%; }
+  .play .i, .banner .i, .note .i { width: 1.2em; height: 1.2em; vertical-align: -0.2em; }
+  .mitem .sub { margin-left: auto; color: var(--muted); font-size: 0.8125rem; }
+  .mline { height: 1px; background: var(--line); margin: 6px 0; }
+
+  /* ---------- Settings screens ---------- */
+  .wrap { padding: 8px 14px 32px; max-width: 560px; margin: 0 auto; width: 100%; }
+  .group-title { font-size: 0.8125rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 18px 6px 6px; }
+  .card { background: var(--soft); border-radius: 14px; overflow: hidden; }
+  .item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .item:last-child { border-bottom: 0; }
+  .item label { font-weight: 500; min-width: 0; }
+  .item .hint { display: block; font-size: 0.75rem; color: var(--muted); font-weight: 400; }
+  .item input[type=text], .item input[type=number], .item input[type=password] {
+    border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    border-radius: 10px; padding: 8px 10px; font-size: 1rem; width: 150px; text-align: right; }
+  .seg { display: flex; background: var(--bg); border-radius: 10px; padding: 2px; flex-wrap: wrap; justify-content: flex-end; }
+  .seg button { border: 0; background: transparent; padding: 6px 9px; border-radius: 8px; font-size: 0.875rem; cursor: pointer; }
+  .seg button.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  input[type=range] { width: 150px; accent-color: var(--accent); }
+  .note { font-size: 0.8125rem; color: var(--muted); margin: 8px 6px; }
+  .note.warn { color: var(--warn); }
+  .btn { width: 100%; border: 0; border-radius: 14px; padding: 14px; margin-top: 18px;
+    background: var(--accent); color: var(--on-accent); font-size: 1.0625rem; font-weight: 600; cursor: pointer; }
+  .btn.ghost { background: var(--soft); color: var(--accent); margin-top: 10px; }
+  .btn.red { color: var(--sos); }
+  .sbtn { border: 0; border-radius: 10px; padding: 8px 12px; background: var(--bg); color: var(--accent);
+    font-size: 0.9375rem; font-weight: 600; cursor: pointer; margin-left: 6px; white-space: nowrap; }
+  .pick { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .pick:last-child { border-bottom: 0; }
+  .pick input { width: 22px; height: 22px; margin: 0 0 0 auto; accent-color: var(--accent); flex-shrink: 0; }
+  .field { width: 100%; border: 0; background: var(--soft); color: var(--text); border-radius: 12px; padding: 13px 14px; font-size: 1rem; outline: none; }
+
+  /* ---------- Name popup and toast ---------- */
+  .modal { position: fixed; inset: 0; background: var(--shade); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 10; }
+  .modal.show { display: flex; }
+  .sheet { background: var(--card); border-radius: 20px; padding: 24px; width: 100%; max-width: 360px; text-align: center; }
+  .sheet h2 { margin: 0 0 6px; }
+  .sheet p { color: var(--muted); margin: 0 0 16px; }
+  .sheet input { width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    border-radius: 12px; padding: 12px; font-size: 1.0625rem; text-align: center; }
+  .toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); max-width: 90vw; text-align: center;
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 20px;
+    font-size: 0.875rem; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5m6-6-6 6 6 6"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M4 20l17-8L4 4l2 8zm2-8h7"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0m-7 7v3"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14m6-14v14"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zm9-13 4 4"/></symbol>
+<symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+<symbol id="i-friends" viewBox="0 0 24 24"><circle cx="10" cy="8" r="4"/><path d="M3 21a7 7 0 0 1 11-5.7M16 19l2 2 4-4"/></symbol>
+<symbol id="i-group" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0m0-15.5a3.5 3.5 0 0 1 0 7m2 2a7 7 0 0 1 4 6.5"/></symbol>
+<symbol id="i-everyone" viewBox="0 0 24 24"><path d="M3 10h3l9-5v14l-9-5H3zm15-1a4 4 0 0 1 0 6"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10m4 0h2M4 17h2m4 0h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+<symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M8 8a6 6 0 0 0 0 8m8-8a6 6 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="i-unlock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></symbol>
+<symbol id="i-sos" viewBox="0 0 24 24"><path d="M7 18v-6a5 5 0 0 1 10 0v6M4 18h16v3H4zM12 2v2M4 5l1.5 1.5M20 5l-1.5 1.5"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3 2 20h20zm0 7v4m0 3h.01"/></symbol>
+<symbol id="i-battery" viewBox="0 0 24 24"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2"/><rect x="5" y="10" style="width:var(--lvl,11px)" height="4" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-signal" viewBox="0 0 24 24"><path d="M5 20v-3" style="stroke:var(--s1,currentColor)"/><path d="M10 20v-6" style="stroke:var(--s2,currentColor)"/><path d="M15 20v-9" style="stroke:var(--s3,currentColor)"/><path d="M20 20V8" style="stroke:var(--s4,currentColor)"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18"/></symbol>
+<symbol id="i-bt" viewBox="0 0 24 24"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></symbol>
+<symbol id="i-mode" viewBox="0 0 24 24"><path d="M4 8h15l-3-3m4 11H5l3 3"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3A4 4 0 0 0 13 5.3l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+</svg>
+
+<!-- ============ HOME: your chats ============ -->
+<section class="view show" id="vHome">
+  <header class="bar">
+    <button class="icon" id="menuBtn" aria-label="Menu"><svg class="i" aria-hidden="true"><use href="#i-menu"/></svg></button>
+    <div class="title"><h1>Chats</h1>
+      <small id="homeStatus"><span class="dot" id="dot"></span><span id="status">Connecting…</span></small></div>
+    <span class="batt" id="batt" style="display:none" aria-label="Battery of this box"><svg class="i" aria-hidden="true"><use href="#i-battery"/></svg><span id="battPct"></span></span>
+    <button class="icon round" id="newBtn" aria-label="New message"><svg class="i" aria-hidden="true"><use href="#i-edit"/></svg></button>
+  </header>
+  <div class="scroll">
+    <div id="nearby"></div>
+    <div id="reqBanner"></div>
+    <div id="chatList"></div>
+  </div>
+</section>
+
+<!-- ============ ONE CHAT ============ -->
+<section class="view" id="vChat">
+  <header class="bar">
+    <button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button>
+    <div id="chatAv"></div>
+    <div class="title"><h2 id="chatTitle">Everyone</h2><small id="chatSub"></small></div>
+    <button class="icon" id="infoBtn" aria-label="Chat info"><svg class="i" aria-hidden="true"><use href="#i-info"/></svg></button>
+  </header>
+  <div id="list"></div>
+  <div class="quick" id="quick"></div>
+  <form class="compose" id="compose" autocomplete="off">
+    <button class="mic" id="micBtn" type="button" aria-label="Hold to talk"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg></button>
+    <input id="msg" maxlength="150" placeholder="Message" enterkeyhint="send">
+    <span class="count" id="count"></span>
+    <button class="send" id="sendBtn" disabled aria-label="Send"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg></button>
+  </form>
+</section>
+
+<!-- ============ CHAT INFO ============ -->
+<section class="view" id="vInfo">
+  <header class="bar"><button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><div class="title"><h2 id="infoTitle">Info</h2></div></header>
+  <div class="scroll"><div class="wrap" id="infoBody"></div></div>
+</section>
+
+<!-- ============ NEW MESSAGE: pick who ============ -->
+<section class="view" id="vNew">
+  <header class="bar"><button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><div class="title"><h2>New message</h2></div></header>
+  <div class="scroll" id="newBody"></div>
+</section>
+
+<!-- ============ NEW GROUP ============ -->
+<section class="view" id="vGroup">
+  <header class="bar"><button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><div class="title"><h2>New group</h2></div></header>
+  <div class="scroll"><div class="wrap">
+    <input class="field" id="groupName" maxlength="16" placeholder="Group name" autocomplete="off" style="margin-top:12px">
+    <div class="group-title">Who's in it</div>
+    <div class="card" id="groupPicks"></div>
+    <div class="note">Only the boxes you pick can read it. You can only add friend boxes.</div>
+    <button class="btn" id="groupMake">Make group</button>
+  </div></div>
+</section>
+
+<!-- ============ SETTINGS SCREENS (from the menu) ============ -->
+<section class="view" id="vProfile">
+  <header class="bar"><button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><div class="title"><h2>Profile</h2></div></header>
+  <div class="scroll"><div class="wrap">
+    <div class="group-title">You</div>
+    <div class="card">
+      <div class="item"><label>Your name<span class="hint">Saved on this phone only</span></label>
+        <input type="text" id="sName" maxlength="12"></div>
+    </div>
+    <button class="btn ghost red" id="forgetMe">Forget me on this box</button>
+    <div class="note">For when the trip ends: this box and its friend boxes forget your name and key, and this phone forgets its chats here.</div>
+    <div class="group-title">This box</div>
+    <div class="card">
+      <div class="item"><label>Box name<span class="hint">Others see this, e.g. "Sara's box"</span></label>
+        <input type="text" id="sBox" maxlength="16"></div>
+      <div class="item"><label>Box ID<span class="hint">From the chip, can't change</span></label>
+        <span id="sId">----</span></div>
+      <div class="item" id="battRow" style="display:none"><label>Battery<span class="hint" id="battV"></span></label>
+        <span id="battP"></span></div>
+    </div>
+    <button class="btn" id="profileSave">Save</button>
+    <button class="btn ghost red" id="factoryReset">Factory reset</button>
+    <div class="note">Before you give the box to someone else, or to start over: the box forgets everything and restarts like new. That is every person, friend box, group and message, its name, radio settings, network lock, Bluetooth PIN, the internet Wi-Fi and its password, and the Meshtastic and MeshCore settings. This phone forgets its chats here too.</div>
+  </div></div>
+</section>
+
+<section class="view" id="vFriends">
+  <header class="bar"><button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><div class="title"><h2>Friend boxes</h2></div></header>
+  <div class="scroll"><div class="wrap">
+    <div id="friends"><div class="empty">Loading…</div></div>
+    <div class="note">Friends get their own secret key for private messages. Before you approve, check that both phones show the same 4-digit code.</div>
+  </div></div>
+</section>
+
+<section class="view" id="vNear">
+  <header class="bar"><button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><div class="title"><h2>Boxes in range</h2></div></header>
+  <div class="scroll"><div class="wrap">
+    <div class="card" id="nearList"></div>
+    <div class="note">Bars show how well your box hears theirs. Gray = not heard for 45 s.</div>
+  </div></div>
+</section>
+
+<section class="view" id="vLock">
+  <header class="bar"><button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><div class="title"><h2>Network lock</h2></div></header>
+  <div class="scroll"><div class="wrap">
+    <div class="card" style="margin-top:12px">
+      <div class="item"><label>Status<span class="hint" id="lockHint">Loading…</span></label><span id="lockState">–</span></div>
+      <div class="item"><label>Passphrase<span class="hint">8+ letters, same on every box</span></label>
+        <input type="password" id="lockPass" maxlength="64" autocomplete="off" placeholder="new passphrase"></div>
+    </div>
+    <div class="note">Locked boxes encrypt every message, and ignore boxes with another passphrase. The check code must be the same on every box. The box never shows the passphrase again.</div>
+    <button class="btn" id="lockSave">Lock with this passphrase</button>
+    <button class="btn ghost red" id="lockOff" style="display:none">Unlock (anyone can read)</button>
+  </div></div>
+</section>
+
+<section class="view" id="vRadio">
+  <header class="bar"><button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><div class="title"><h2>Radio</h2></div></header>
+  <div class="scroll"><div class="wrap">
+    <div class="card" style="margin-top:12px">
+      <div class="item"><label>Frequency<span class="hint">MHz, 902–928</span></label>
+        <input type="number" id="sFreq" min="902" max="928" step="0.1"></div>
+      <div class="item"><label>Range vs speed<span class="hint">Spreading factor</span></label><div class="seg" id="sSf"></div></div>
+      <div class="item"><label>Bandwidth<span class="hint">kHz</span></label><div class="seg" id="sBw"></div></div>
+      <div class="item"><label>Power<span class="hint" id="sTxVal">14 dBm</span></label>
+        <input type="range" id="sTx" min="-9" max="22" step="1"></div>
+    </div>
+    <div class="note warn"><svg class="i" aria-hidden="true"><use href="#i-warn"/></svg> All boxes must use the same frequency, spreading factor and bandwidth, or they can't hear each other.</div>
+    <button class="btn" id="save">Save</button>
+    <button class="btn ghost" id="reload">Reload from box</button>
+  </div></div>
+</section>
+
+<section class="view" id="vMode">
+  <header class="bar"><button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><div class="title"><h2>Box mode</h2></div></header>
+  <div class="scroll"><div class="wrap">
+    <div class="card" id="modes" style="margin-top:12px"><div class="item"><label>Loading…</label></div></div>
+    <div class="note">Switching restarts the box. In Meshtastic or MeshCore mode, use their app over Bluetooth. To come back to FreeMesh, hold the mode button (D1) for 5 s: the light pulses, then the box restarts.</div>
+  </div></div>
+</section>
+
+<section class="view" id="vUpd">
+  <header class="bar"><button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><div class="title"><h2>Update</h2></div></header>
+  <div class="scroll"><div class="wrap">
+    <div class="card" style="margin-top:12px">
+      <div class="item"><label>This box<span class="hint" id="upVer">Loading…</span></label><span id="upState">–</span></div>
+      <div class="item"><label>Internet Wi-Fi<span class="hint">Home Wi-Fi or a phone hotspot</span></label>
+        <input type="text" id="upSsid" maxlength="32" autocomplete="off" placeholder="Wi-Fi name"></div>
+      <div class="item"><label>Wi-Fi password</label>
+        <input type="password" id="upPass" maxlength="64" autocomplete="off" placeholder="password"></div>
+      <div class="item"><label>Update address<span class="hint">Leave it as it is</span></label>
+        <input type="text" id="upUrl" maxlength="159" autocomplete="off" placeholder="https://…/update.txt"></div>
+    </div>
+    <div class="note" id="upMsg" style="display:none"></div>
+    <button class="btn" id="upGo">Check and update</button>
+    <div class="note">The box joins that Wi-Fi, downloads the newest FreeMesh, Meshtastic and MeshCore, and restarts by itself. It takes a few minutes. Keep the box powered.<br><br>
+      Using your phone's hotspot? Type its name and password, tap the button, then turn the hotspot on. The box looks for it for 10 minutes. When the box's Wi-Fi is back, join it again to see the result here.<br><br>
+      Public Wi-Fi with a sign-in page does not work.</div>
+  </div></div>
+</section>
+
+<section class="view" id="vBle">
+  <header class="bar"><button class="icon" data-back aria-label="Back"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg></button><div class="title"><h2>Bluetooth</h2></div></header>
+  <div class="scroll"><div class="wrap">
+    <div class="card" style="margin-top:12px">
+      <div class="item"><label>Bluetooth<span class="hint">Off until you turn it on. Only needed for the FreeMesh app; off leaves more memory for the web page. Changing it restarts the box.</span></label>
+        <button class="btn ghost" id="bleToggle" style="width:auto;margin:0">–</button></div>
+      <div class="item"><label>PIN<span class="hint">Phones type this once to pair with the app</span></label><b id="blePin">––––––</b></div>
+      <div class="item"><label>Phones connected</label><span id="blePhones">–</span></div>
+      <div class="item"><label>New PIN<span class="hint">6 digits, not starting with 0</span></label>
+        <input type="number" id="bleNew" inputmode="numeric" placeholder="123456"></div>
+    </div>
+    <button class="btn" id="bleSave">Change PIN</button>
+    <button class="btn ghost red" id="bleForget">Forget all paired phones</button>
+    <div class="note">The FreeMesh app talks to this box over Bluetooth. After you change the PIN or forget the phones, each phone must pair again with the new PIN.</div>
+  </div></div>
+</section>
+
+<!-- ============ SIDE MENU ============ -->
+<div id="shade"></div>
+<nav id="drawer" aria-label="Menu">
+  <div class="me-card"><div id="meAv"></div><div><b id="meName">You</b><small id="meBox">FreeMesh box</small></div></div>
+  <button class="mitem" data-go="vProfile"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-person"/></svg></span>Profile</button>
+  <button class="mitem" data-go="vFriends"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-friends"/></svg></span>Friend boxes<span class="sub" id="mFriends"></span></button>
+  <button class="mitem" data-go="vNear"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-radio"/></svg></span>Boxes in range<span class="sub" id="mNear"></span></button>
+  <div class="mline"></div>
+  <button class="mitem" data-go="vLock"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg></span>Network lock<span class="sub" id="mLock"></span></button>
+  <button class="mitem" data-go="vRadio"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg></span>Radio</button>
+  <button class="mitem" data-go="vBle"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-bt"/></svg></span>Bluetooth</button>
+  <button class="mitem" data-go="vMode"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-mode"/></svg></span>Box mode</button>
+  <button class="mitem" data-go="vUpd"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span>Update</button>
+</nav>
+
+<!-- The "Who are you?" popup is shown the first time only. -->
+<div class="modal" id="nameModal">
+  <form class="sheet" id="nameForm">
+    <h2>Who are you?</h2>
+    <p>Your name is shown next to your messages.<br><small>Tip: Share → Add to Home Screen gives you an app icon.</small></p>
+    <input id="nameInput" maxlength="12" placeholder="Your name" autocomplete="name">
+    <button class="btn">Start chatting</button>
+  </form>
+</div>
+
+<!-- The long-press menu hides a chat or unsends a message. -->
+<div class="modal" id="actModal"><div class="sheet" id="actSheet"></div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- Tiny helpers ----------
+const $ = (id) => document.getElementById(id);                 // $("list") returns the element with id="list".
+function el(tag, cls, text) {                                  // Makes an element. The text goes in as textContent, not HTML.
+  const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e;
+}
+function ic(name) {                                            // Makes an icon from the sprite: <use href="#i-name"/>.
+  const NS = "http://www.w3.org/2000/svg", s = document.createElementNS(NS, "svg"), u = document.createElementNS(NS, "use");
+  s.setAttribute("class", "i"); s.setAttribute("aria-hidden", "true"); u.setAttribute("href", "#i-" + name); s.appendChild(u); return s;
+}
+function toast(text) {                                         // Shows a small pill at the bottom for 2 s.
+  const t = $("toast"); t.textContent = text; t.classList.add("show");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2000);
+}
+// Calls fn() when a finger holds the element for half a second. A normal tap still works, and the tap
+// that ends a hold is ignored. A right-click on a computer does the same.
+function longPress(e, fn) {
+  let t = null, x = 0, y = 0;
+  const stop = () => { clearTimeout(t); t = null; };
+  e.addEventListener("pointerdown", (ev) => { x = ev.clientX; y = ev.clientY; stop(); t = setTimeout(() => { t = null; e.held = true; fn(); }, 500); });
+  e.addEventListener("pointermove", (ev) => { if (t && Math.abs(ev.clientX - x) + Math.abs(ev.clientY - y) > 12) stop(); });   // A moving finger is scrolling, not holding.
+  ["pointerup", "pointercancel", "pointerleave"].forEach(n => e.addEventListener(n, stop));
+  e.addEventListener("contextmenu", (ev) => { ev.preventDefault(); stop(); fn(); });
+  e.addEventListener("click", (ev) => { if (e.held) { e.held = false; ev.stopImmediatePropagation(); ev.preventDefault(); } }, true);
+}
+// Shows a small menu: a title, big buttons and Cancel. items: [{ label, red, fn }].
+function actions(title, items) {
+  const sh = $("actSheet"); sh.textContent = "";
+  sh.appendChild(el("h2", "", title));
+  for (const it of items) {
+    const b = el("button", "btn" + (it.red ? " ghost red" : " ghost"), it.label);
+    b.onclick = () => { $("actModal").classList.remove("show"); it.fn(); };
+    sh.appendChild(b);
+  }
+  const c = el("button", "btn ghost", "Cancel"); c.onclick = () => $("actModal").classList.remove("show"); sh.appendChild(c);
+  $("actModal").classList.add("show");
+}
+$("actModal").onclick = (e) => { if (e.target === $("actModal")) $("actModal").classList.remove("show"); };   // A tap outside the sheet cancels.
+function clean(s) { return s.replace(/[|\n\r]/g, " ").trim(); }   // '|' is the packet separator, and newlines would break lines.
+function getName() { try { return localStorage.getItem("name") || ""; } catch (e) { return ""; } }
+function setName(n) { try { localStorage.setItem("name", n); } catch (e) {} showName(); if (current) openChat(current, true); drawHome(); if (typeof register === "function") register(); }
+const COLORS = ["#0F766E", "#1D4ED8", "#6D28D9", "#BE185D", "#C2410C", "#15803D", "#155E75", "#92400E"];   // White text has a contrast of at least 5:1 on each color.
+function avatar(name, small, icon) {                           // Makes a colored circle with the first letter, or an icon.
+  let h = 0; for (const ch of name || "?") h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const a = el("div", "av" + (small ? " sm" : ""), icon ? null : (name || "?").trim().charAt(0).toUpperCase() || "?");
+  if (icon) a.appendChild(ic(icon));
+  a.style.background = COLORS[h % COLORS.length];
+  return a;
+}
+function showName() {
+  const n = getName();
+  $("sName").value = n; $("meName").textContent = n || "You";
+  $("meAv").replaceChildren(avatar(n || "?"));
+}
+function clock(t) { return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+
+// ---------- Moving between screens (the phone's Back button works too) ----------
+const stack = ["vHome"];                       // The open screens, bottom to top.
+function topView() { return stack[stack.length - 1]; }
+function render(animate) {
+  document.querySelectorAll(".view").forEach(v => {
+    const on = v.id === topView();
+    v.classList.toggle("show", on); v.classList.toggle("in", on && !!animate);
+  });
+  document.body.classList.remove("menu");
+  if (topView() === "vChat" && current) { unread[current] = 0; }
+  if (!stack.includes("vChat")) current = null;               // With no chat open, every new message counts as unread.
+  if (topView() === "vHome") drawHome();
+  onShow(topView());
+}
+function go(v) { stack.push(v); history.pushState({ n: stack.length }, ""); render(true); }
+function back() { history.back(); }
+window.addEventListener("popstate", () => {
+  if (document.body.classList.contains("menu")) { document.body.classList.remove("menu"); return; }
+  if (stack.length > 1) stack.pop();
+  render(false);
+});
+history.replaceState({ n: 1 }, "");
+document.querySelectorAll("[data-back]").forEach(b => b.onclick = back);
+const extraShow = {};                          // Screens added by an add-on script: view id -> its loader.
+function onShow(v) {                           // Loads fresh data for the screen that just opened.
+  if (v === "vProfile" || v === "vRadio") loadSettings();
+  if (v === "vFriends") loadFriends();
+  if (v === "vNear") drawNear();
+  if (v === "vLock") loadLock();
+  if (extraShow[v]) extraShow[v]();
+  if (v === "vMode") loadModes();
+  if (v === "vBle") loadBle();
+  if (v === "vUpd") loadUp();
+  if (v === "vInfo") drawInfo();
+  if (v === "vNew") drawNew();
+}
+
+// ---------- Side menu ----------
+function openMenu() { document.body.classList.add("menu"); history.pushState({ menu: 1 }, ""); loadLock(); }
+$("menuBtn").onclick = openMenu;
+$("shade").onclick = back;                     // A tap outside closes the menu, the same as Back.
+function goButton(b) {                         // Makes a menu line open the screen named in its data-go.
+  b.onclick = () => {
+    document.body.classList.remove("menu");
+    stack.push(b.dataset.go); history.replaceState({ n: stack.length }, "");   // The menu's history step becomes this screen.
+    render(true);
+  };
+}
+document.querySelectorAll("[data-go]").forEach(goButton);
+
+// ---------- "Who are you?" ----------
+function askName() { $("nameModal").classList.add("show"); $("nameInput").focus(); }
+$("nameForm").onsubmit = (e) => {
+  e.preventDefault();
+  const n = clean($("nameInput").value);
+  if (!n) return;
+  setName(n); $("nameModal").classList.remove("show");
+};
+
+// ---------- Box settings (Profile and Radio) ----------
+const SF = [7, 8, 9, 10, 11, 12], BW = [125, 250, 500];
+let S = null;                                  // The box's settings, as it sent them.
+let cur = { sf: 9, bw: 125 };                  // What the segment buttons show now.
+function seg(box, values, key) {
+  box.textContent = "";
+  values.forEach(v => {
+    const b = el("button", cur[key] === v ? "on" : "", v); b.type = "button";
+    b.onclick = () => { cur[key] = v; seg(box, values, key); };
+    box.appendChild(b);
+  });
+}
+$("sTx").oninput = () => $("sTxVal").textContent = $("sTx").value + " dBm";
+let extrasLoaded = false;
+function loadExtras(list) {                    // Loads the add-on scripts in "extras" of /api/settings; most boxes have none.
+  if (extrasLoaded || !list) return;
+  extrasLoaded = true;
+  list.forEach(src => { const s = document.createElement("script"); s.src = src; document.body.appendChild(s); });
+}
+async function loadSettings() {
+  try {
+    S = await (await fetch("/api/settings")).json();
+    loadExtras(S.extras);
+    $("sBox").value = S.devicename; $("sId").textContent = S.id; $("meBox").textContent = "on " + S.devicename;
+    $("sFreq").value = (S.freq / 1e6).toFixed(1);
+    $("sTx").value = S.tx; $("sTx").oninput();
+    cur = { sf: S.sf, bw: S.bw }; seg($("sSf"), SF, "sf"); seg($("sBw"), BW, "bw");
+  } catch (e) { toast("Couldn't read the box's settings"); }
+}
+async function saveSettings(change) {          // The box wants every field, so all of them are sent.
+  if (!S) { toast("Not connected to the box"); return; }
+  const s = Object.assign({ devicename: S.devicename, freq: S.freq, sf: S.sf, bw: S.bw, tx: S.tx }, change);
+  try {
+    const r = await fetch("/api/settings", { method: "POST", body: new URLSearchParams(s) });
+    toast(r.ok ? "Saved ✓" : "Box said: " + await r.text());
+    loadSettings();
+  } catch (e) { toast("Not saved: no connection"); }
+}
+$("reload").onclick = loadSettings;
+$("save").onclick = () => saveSettings({ freq: Math.round(parseFloat($("sFreq").value) * 1e6), sf: cur.sf, bw: cur.bw, tx: $("sTx").value });
+$("profileSave").onclick = () => {
+  const n = clean($("sName").value); if (n && n !== getName()) setName(n);
+  const b = clean($("sBox").value);
+  if (S && b && b !== S.devicename) saveSettings({ devicename: b }); else toast("Saved ✓");
+};
+
+// ---------- Box mode ----------
+async function loadModes() {
+  const box = $("modes");
+  try {
+    const j = await (await fetch("/api/mode")).json();
+    box.textContent = "";
+    for (const m of j.modes) {
+      const row = el("div", "item"), lab = el("label", "", m.name);
+      lab.appendChild(el("span", "hint", m.id === j.current ? "Running now" : m.installed ? "Installed" : "Not installed yet"));
+      row.appendChild(lab);
+      if (m.id !== j.current && m.installed) { const b = el("button", "sbtn", "Switch"); b.onclick = () => switchMode(m); row.appendChild(b); }
+      box.appendChild(row);
+    }
+  } catch (e) { box.textContent = ""; }
+}
+async function switchMode(m) {
+  if (!confirm("Restart the box in " + m.name + " mode? Everyone on this Wi-Fi will be disconnected.")) return;
+  try {
+    const r = await fetch("/api/mode", { method: "POST", body: new URLSearchParams({ mode: m.id }) });
+    toast(r.ok ? "Restarting in " + m.name + "…" : await r.text());
+  } catch (e) { toast("Restarting in " + m.name + "…"); }   // The box may restart before it answers.
+}
+
+// ---------- Friend boxes ----------
+let friends = [], allFriends = [];
+function friendRow(name, hint, buttons) {
+  const row = el("div", "item"), lab = el("label", "", name);
+  lab.appendChild(el("span", "hint", hint)); row.appendChild(lab);
+  const w = el("span");
+  for (const [text, fn] of buttons) { const b = el("button", "sbtn", text); b.onclick = fn; w.appendChild(b); }
+  row.appendChild(w);
+  return row;
+}
+let lastFriendsJ = null;
+function showFriends(j) {
+  lastFriendsJ = j;
+  allFriends = j.friends; friends = j.friends.filter(f => f.state === "friend");
+  const box = $("friends"); box.textContent = "";
+  const asks = j.friends.filter(f => f.state === "asks_you"), asked = j.friends.filter(f => f.state === "asked");
+  const known = new Set(j.friends.map(f => f.id));
+  const near = lastPeers.filter(p => !known.has(p.id));
+  const section = (title, rows) => {
+    if (!rows.length) return;
+    box.appendChild(el("div", "group-title", title));
+    const c = el("div", "card"); rows.forEach(r => c.appendChild(r)); box.appendChild(c);
+  };
+  section("Wants to be friends", asks.map(f => friendRow(f.devicename, "Code " + f.code,
+    [["Approve", () => friendDo("approve", f.id)], ["Ignore", () => friendDo("remove", f.id)]])));
+  // Lists each friend box, then the people who use it (private, end-to-end chat with one person).
+  const friendRows = [];
+  for (const f of friends) {
+    friendRows.push(friendRow(f.devicename, "Code " + f.code + " · whole box",
+      [["Message", () => openChat("p:" + f.id)], ["Remove", () => { if (confirm("Remove " + f.devicename + "?")) friendDo("remove", f.id); }]]));
+    const on = people.filter(p => p.box === f.id && p.pub);
+    for (const p of on) friendRows.push(friendRow("   👤 " + p.name, (p.online ? "Active now" : "Not active") + " · 🔐 private",
+      [["Message", () => openChat("u:" + p.box + ":" + p.pid)]]));
+    if (!on.length) friendRows.push(el("div", "note", "No one on " + f.devicename + " yet. People show up here once they open 192.168.4.1 on that box and set their name."));
+  }
+  section("Your friends", friendRows);
+  section("Waiting for them", asked.map(f => friendRow(f.devicename, "Approve it on their box",
+    [["Cancel", () => friendDo("remove", f.id)]])));
+  section("In range", near.map(p => friendRow(p.devicename, "Not a friend yet", [["Add friend", () => friendDo("ask", p.id)]])));
+  if (!box.children.length) box.appendChild(el("div", "empty", "No boxes in range yet. Turn on another box nearby."));
+  $("mFriends").textContent = asks.length ? asks.length + " new" : "";
+  drawHome();
+}
+async function loadFriends() { try { showFriends(await (await fetch("/api/friends")).json()); } catch (e) {} }
+async function friendDo(what, id) {
+  try {
+    const r = await fetch("/api/friends", { method: "POST", body: new URLSearchParams({ do: what, id }) });
+    if (!r.ok) { toast(await r.text()); return; }
+    showFriends(await r.json());
+    if (what === "ask") toast("Request sent. Approve it on the other box.");
+    if (what === "approve") toast("You're friends now 🤝");
+  } catch (e) { toast("Box not answering"); }
+}
+function isFriend(id) { return friends.some(f => f.id === id); }
+function askFriend(p) {
+  if (isFriend(p.id)) return openChat("p:" + p.id);
+  const f = allFriends.find(f => f.id === p.id);
+  if (f && f.state === "asked") return toast("Waiting for " + p.devicename + " to approve");
+  if (f && f.state === "asks_you") return go("vFriends");
+  if (confirm("Send a friend request to " + p.devicename + "? Then you can message them privately.")) friendDo("ask", p.id);
+}
+
+// ---------- Battery of this box (only on boards that can measure it; "batt" is -1 otherwise) ----------
+function showBatt(j) {
+  const has = typeof j.batt === "number" && j.batt >= 0;
+  $("batt").style.display = has ? "" : "none"; $("battRow").style.display = has ? "" : "none";
+  if (!has) return;
+  $("battPct").textContent = j.batt + "%"; $("batt").classList.toggle("low", j.batt <= 15);
+  $("battP").textContent = j.batt + "%" + (j.batt <= 15 ? " · charge soon" : "");
+  $("battV").textContent = (j.batt_mv / 1000).toFixed(2) + " V. Reads higher while charging";
+}
+async function loadBatt() { try { showBatt(await (await fetch("/api/settings")).json()); } catch (e) {} }
+loadBatt(); setInterval(loadBatt, 60000);
+
+// ---------- Quick messages: one tap sends, and the list is saved on this phone ----------
+const QUICK_DEFAULT = ["OK", "On my way", "Wait for me", "Where are you?", "Stop here", "Need help"];
+function quickList() {
+  try { const a = JSON.parse(localStorage.getItem("quick")); if (Array.isArray(a) && a.length) return a; } catch (e) {}
+  return QUICK_DEFAULT;
+}
+function drawQuick() {
+  const box = $("quick"); box.textContent = "";
+  for (const t of quickList()) {
+    const b = el("button", "", t); b.type = "button";
+    b.onclick = () => { if (sending || $("msg").value.trim()) return;      // Text that is being typed is not replaced.
+      $("msg").value = t; $("compose").dispatchEvent(new Event("submit", { cancelable: true })); };
+    box.appendChild(b);
+  }
+  const e = el("button", "edit", "Edit"); e.type = "button";
+  e.onclick = () => {
+    const v = prompt("Your quick messages, separated by commas (up to 8):", quickList().join(", "));
+    if (v === null) return;
+    const a = v.split(",").map(s => s.trim().slice(0, 40)).filter(Boolean).slice(0, 8);
+    try { if (a.length) localStorage.setItem("quick", JSON.stringify(a)); else localStorage.removeItem("quick"); } catch (err) {}
+    drawQuick();
+  };
+  box.appendChild(e);
+}
+drawQuick();
+
+// ---------- Update over the internet ----------
+function showUp(j) {
+  $("upVer").textContent = "FreeMesh " + j.version;
+  if (document.activeElement !== $("upSsid") && !$("upSsid").value) $("upSsid").value = j.ssid || "";
+  if (document.activeElement !== $("upUrl") && !$("upUrl").value) $("upUrl").value = j.url || "";
+  $("upPass").placeholder = j.has_pass ? "saved" : "password";
+  const names = { freemesh: "FreeMesh", meshtastic: "Meshtastic", meshcore: "MeshCore" };
+  const busy = ["joining", "checking", "downloading", "restarting", "finishing"].includes(j.state);
+  let state = "–";
+  if (j.state === "joining") state = "Joining the Wi-Fi…";
+  else if (j.state === "checking") state = "Checking…";
+  else if (j.state === "downloading") state = (names[j.what] || "") + " " + j.percent + "%";
+  else if (j.state === "restarting") state = "Restarting…";
+  else if (j.state === "finishing") state = "Finishing " + j.percent + "%";
+  else if (j.unfinished) state = "Not finished";
+  else if (j.state === "done") state = "Done";
+  else if (j.state === "failed") state = "Failed";
+  $("upState").textContent = state;
+  upBusyAt = busy ? Date.now() : 0;
+  let msg = j.msg || "";
+  if (busy) msg = UP_WORKING;                    // An old result would mislead while the update runs.
+  else if (j.unfinished) msg += (msg ? (/[.?!]$/.test(msg) ? " " : ". ") : "") + "The box finishes the update by itself the next time it starts near that Wi-Fi. Or tap Try again when the Wi-Fi is in range.";
+  $("upMsg").textContent = msg; $("upMsg").style.display = msg ? "" : "none";
+  $("upGo").style.display = busy ? "none" : "";  // There is nothing to press while the update runs.
+  $("upGo").textContent = j.unfinished ? "Try again" : "Check and update";
+}
+const UP_WORKING = "The box is updating. Keep it powered. It restarts by itself, so its Wi-Fi drops for a moment: join it again if your phone leaves. About 3 minutes.";
+let upBusyAt = 0;                                // When the update was last seen running (0 = not running).
+async function loadUp() {
+  try { showUp(await (await fetch("/api/update")).json()); }
+  catch (e) {                                    // No answer is normal for a moment while the box updates and restarts.
+    if (Date.now() - upBusyAt < 300000) { $("upState").textContent = "Updating…"; $("upMsg").textContent = UP_WORKING; $("upMsg").style.display = ""; $("upGo").style.display = "none"; }
+    else $("upState").textContent = "Box not answering";
+  }
+}
+setInterval(() => { if ($("vUpd").classList.contains("show")) loadUp(); }, 3000);   // Shows live progress while the screen is open.
+$("upGo").onclick = async () => {
+  try {
+    const r = await fetch("/api/update", { method: "POST", body: new URLSearchParams({ ssid: $("upSsid").value.trim(), pass: $("upPass").value, url: $("upUrl").value.trim() }) });
+    if (!r.ok) { toast(await r.text()); return; }
+    showUp(await r.json()); $("upPass").value = ""; upBusyAt = Date.now(); toast("Started");
+  } catch (e) { toast("Box not answering"); }
+};
+
+// ---------- Bluetooth (for the phone app) ----------
+let bleOn = false;
+function showBle(j) {
+  if (j.restarting) { toast("Restarting the box… reconnect to its Wi-Fi in ~15 s"); return; }
+  bleOn = j.on === true;
+  $("bleToggle").textContent = bleOn ? "On · turn off" : "Off · turn on";
+  $("blePin").textContent = j.pin || "–"; $("blePhones").textContent = bleOn ? (j.phones ?? "–") : "Bluetooth off";
+}
+$("bleToggle").onclick = () => { if (confirm(bleOn ? "Turn Bluetooth off? The app stops working; the web page keeps working. The box restarts." : "Turn Bluetooth on? The box restarts.")) bleDo({ do: bleOn ? "off" : "on" }, ""); };
+async function loadBle() { try { showBle(await (await fetch("/api/ble")).json()); } catch (e) { $("blePin").textContent = "Off"; } }
+async function bleDo(body, ok) {
+  try {
+    const r = await fetch("/api/ble", { method: "POST", body: new URLSearchParams(body) });
+    if (!r.ok) { toast(await r.text()); return; }
+    showBle(await r.json()); toast(ok);
+  } catch (e) { toast("Box not answering"); }
+}
+$("bleSave").onclick = () => { const v = $("bleNew").value.trim(); if (!/^[1-9][0-9]{5}$/.test(v)) { toast("Use 6 digits, not starting with 0"); return; } bleDo({ do: "pin", pin: v }, "PIN changed"); $("bleNew").value = ""; };
+// ---------- Forget me and factory reset ----------
+let forgotten = false;                         // Set after "Forget me": the page stops registering with the box.
+$("forgetMe").onclick = () => actions("Forget me on this box?", [{ label: "Forget me", red: true, fn: async () => {
+  try {
+    const r = await fetch("/api/forgetme", { method: "POST", body: new URLSearchParams({ pid: ID ? ID.pid : "" }) });
+    if (!r.ok) { toast(await r.text()); return; }
+  } catch (e) { toast("Box not answering, try again"); return; }
+  forgotten = true; clearTimeout(timer);
+  try { localStorage.clear(); } catch (e) {}   // The name, key and hidden chats are removed from this phone too.
+  document.body.replaceChildren(el("div", "empty", "Done. This box forgot you. You can close this page."));
+} }]);
+$("factoryReset").onclick = () => actions("Factory reset? The box forgets everything.", [{ label: "Erase everything and restart", red: true, fn: async () => {
+  try {
+    const r = await fetch("/api/factory", { method: "POST", body: new URLSearchParams({ confirm: "yes" }) });
+    if (!r.ok) { toast(await r.text()); return; }
+  } catch (e) { toast("Box not answering, try again"); return; }
+  forgotten = true; clearTimeout(timer);
+  try { localStorage.clear(); } catch (e) {}   // This phone's name, key and chats for this box are removed too.
+  document.body.replaceChildren(el("div", "empty", "Done. The box is starting like new (about a minute). Join its Wi-Fi again and open 192.168.4.1."));
+} }]);
+$("bleForget").onclick = () => { if (confirm("Forget every paired phone? They must type the PIN again.")) bleDo({ do: "forget" }, "Forgot all phones"); };
+
+// ---------- Network lock ----------
+let locked = false;
+function showLock(j) {
+  locked = !!j.locked;
+  $("lockState").textContent = j.locked ? "🔒 Locked" : "🔓 Open";
+  $("lockHint").textContent = j.locked ? "Check code " + j.code : "Anyone with a box can read";
+  $("lockOff").style.display = j.locked ? "" : "none";
+  $("lockSave").textContent = j.locked ? "Change passphrase" : "Lock with this passphrase";
+  $("mLock").textContent = j.locked ? "On" : "Off";
+}
+async function loadLock() { try { showLock(await (await fetch("/api/lock")).json()); } catch (e) {} }
+async function setLock(pass) {
+  try {
+    const r = await fetch("/api/lock", { method: "POST", body: new URLSearchParams({ pass }) });
+    if (!r.ok) { toast(await r.text()); return; }
+    const j = await r.json();
+    showLock(j); $("lockPass").value = "";
+    toast(j.locked ? "Locked. Check code " + j.code : "Unlocked");
+  } catch (e) { toast("Box not answering"); }
+}
+$("lockSave").onclick = () => { const p = $("lockPass").value; if (p.length < 8) { toast("Use at least 8 letters"); return; } setLock(p); };
+$("lockOff").onclick = () => { if (confirm("Unlock? Anyone with a LoRa box could then read your messages.")) setLock(""); };
+
+// ---------- People: chat privately with one person, encrypted on the phone ----------
+// This phone makes its own id and X25519 key pair once and keeps them. A message to a person is
+// encrypted on the phone with a key made from this phone's key pair and the other phone's public key.
+// The boxes pass it on without the key. The browser allows this crypto only on the https:// page.
+let ID = null;                                 // Shape: { pid: "a3f0", pub: "64 hex", priv: CryptoKey }.
+let people = [];                               // From GET /api/people: the people on this box and on friend boxes.
+const keyCache = {}, opened = {};              // Person -> AES key, and message id -> opened text.
+const hex = (u8) => [...u8].map(b => b.toString(16).padStart(2, "0")).join("");
+const unhex = (h) => new Uint8Array(h.match(/../g).map(x => parseInt(x, 16)));
+const enc = new TextEncoder(), dec = new TextDecoder();
+function b64u(u8) { let s = ""; for (const b of u8) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function unb64u(t) { const s = atob(t.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((t.length + 3) % 4)); return Uint8Array.from(s, c => c.charCodeAt(0)); }
+function canLock() { return !!(window.isSecureContext && window.crypto && crypto.subtle); }
+function myBox() { return me || (S && S.id) || ""; }
+async function loadId() {
+  if (!canLock()) return;
+  try {
+    let s = null; try { s = JSON.parse(localStorage.getItem("id") || "null"); } catch (e) {}
+    if (!s) {
+      const kp = await crypto.subtle.generateKey({ name: "X25519" }, true, ["deriveBits"]);
+      s = { pid: hex(crypto.getRandomValues(new Uint8Array(2))),
+            pub: hex(new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey))),
+            priv: await crypto.subtle.exportKey("jwk", kp.privateKey) };
+      try { localStorage.setItem("id", JSON.stringify(s)); } catch (e) {}
+    }
+    ID = { pid: s.pid, pub: s.pub, priv: await crypto.subtle.importKey("jwk", s.priv, { name: "X25519" }, false, ["deriveBits"]) };
+    await register();
+  } catch (e) { ID = null; console.log("no X25519 on this phone", e); }
+}
+async function register() {                    // Tells the box that this phone uses it; repeated every minute.
+  if (forgotten || !ID || !getName()) return;
+  try {
+    const r = await fetch("/api/me", { method: "POST", body: new URLSearchParams({ pid: ID.pid, name: getName(), pub: ID.pub }) });
+    if (r.ok) showPeople(await r.json());
+  } catch (e) {}
+}
+async function loadPeople() { try { showPeople(await (await fetch("/api/people")).json()); } catch (e) {} }
+function showPeople(j) { people = j.people || []; if (j.me) me = j.me; if (lastFriendsJ) showFriends(lastFriendsJ); else drawHome(); drawSub(); }
+function personOf(c) { const [, box, pid] = c.split(":"); return people.find(p => p.box === box && p.pid === pid) || { box, pid, name: "Someone", pub: "" }; }
+function boxName(id) { return id === myBox() ? "this box" : friendName(id); }
+async function personKey(box, pid, pub) {     // Derives the same key on both phones: X25519 -> HKDF -> AES-GCM.
+  const k = box + ":" + pid + ":" + pub;
+  if (keyCache[k]) return keyCache[k];
+  const theirs = await crypto.subtle.importKey("raw", unhex(pub), { name: "X25519" }, false, []);
+  const bits = await crypto.subtle.deriveBits({ name: "X25519", public: theirs }, ID.priv, 256);
+  const hk = await crypto.subtle.importKey("raw", bits, "HKDF", false, ["deriveKey"]);
+  const a = myBox() + ID.pid, b = box + pid, info = a < b ? a + b : b + a;
+  return keyCache[k] = await crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: enc.encode("FreeMesh person v1"), info: enc.encode(info) },
+    hk, { name: "AES-GCM", length: 128 }, false, ["encrypt", "decrypt"]);
+}
+const aad = (fb, fp, tb, tp) => enc.encode(fb + fp + ">" + tb + tp);   // The addresses are authenticated too.
+async function openE2E(m) {                    // Fills m.text and m.from from the encrypted bytes.
+  if (m.voice) {                               // An encrypted voice clip is not opened until someone taps play.
+    const { sent, other } = e2eEnds(m);
+    const p = people.find(x => x.box === other.box && x.pid === other.pid);
+    Object.assign(m, { from: sent ? getName() : (p ? p.name : "Someone"), text: "🎤 Voice message (" + m.voice + " s) 🔐" });
+    return;
+  }
+  if (opened[m.id + ":" + m.text]) { Object.assign(m, opened[m.id + ":" + m.text]); return; }
+  const blob = m.text, sent = !!m.local && m.from_pid === (ID && ID.pid);
+  const here = m.peer === myBox();
+  const fb = sent ? myBox() : m.peer, tb = sent ? m.peer : myBox();
+  const other = { box: m.peer, pid: sent ? m.to_pid : m.from_pid };
+  let out = { text: "🔒 Can't open this message", from: "?" , blob };
+  try {
+    if (!ID) throw 0;
+    let p = people.find(x => x.box === other.box && x.pid === other.pid);
+    if (!p) { await loadPeople(); p = people.find(x => x.box === other.box && x.pid === other.pid); }
+    if (!p) throw 0;
+    const raw = unb64u(blob), key = await personKey(p.box, p.pid, p.pub);
+    const plain = dec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12), additionalData: aad(here ? myBox() : fb, m.from_pid, here ? myBox() : tb, m.to_pid) }, key, raw.slice(12)));
+    const cut = plain.indexOf("\x1f");
+    out = { from: plain.slice(0, cut), text: plain.slice(cut + 1), blob };
+    opened[m.id + ":" + blob] = out;
+  } catch (e) {}
+  Object.assign(m, out);
+}
+// Sends to a person. The box must know both phones, so this registers this phone first. If the box
+// still does not know one of them, it registers again, reloads the people list and sends once more.
+async function sendPerson(doSend) {
+  await register();
+  let r = await doSend();
+  if (r.status === 400 && (await r.clone().text()).includes("Don't know")) {
+    await register(); await loadPeople(); await new Promise(ok => setTimeout(ok, 1500));
+    r = await doSend();
+  }
+  return r;
+}
+async function sendE2E(text) {
+  const p = personOf(current);
+  if (!ID) { if (canLock()) toast("This browser can't lock messages. Update it (Chrome 133+ or iOS 17+)"); else openSecure(); return false; }
+  if (!p.pub) { toast("Don't know " + p.name + "'s key yet, try again in a minute"); return; }
+  const plain = enc.encode(getName() + "\x1f" + text);
+  if (plain.length > 110) { toast("Too long for a private message to a person (" + plain.length + "/110 bytes)"); return false; }
+  const iv = crypto.getRandomValues(new Uint8Array(12)), key = await personKey(p.box, p.pid, p.pub);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: aad(myBox(), ID.pid, p.box, p.pid) }, key, plain));
+  const blob = new Uint8Array(12 + ct.length); blob.set(iv); blob.set(ct, 12);
+  const r = await sendPerson(() => fetch("/api/psend", { method: "POST", body: new URLSearchParams({ to_box: p.box, to_pid: p.pid, from_pid: ID.pid, blob: b64u(blob) }) }));
+  if (!r.ok) toast(await r.text());
+  return true;
+}
+// ---------- Voice to one person, end-to-end ----------
+// The phone compresses the clip (Codec2 at 1200 bit/s, compiled to WebAssembly, /codec2.wasm) and
+// encrypts it with the person key. The boxes carry the encrypted bytes without the key; the other
+// phone decrypts and plays the clip.
+let C2 = null;
+async function codec2() {
+  if (C2) return C2;
+  const bytes = await (await fetch("/codec2.wasm")).arrayBuffer();
+  let mem = null;
+  const wasi = {                               // The four functions the C library asks the browser for.
+    fd_prestat_get: () => 8, fd_prestat_dir_name: () => 8,   // 8 means "no such folder": there are none.
+    proc_exit: (c) => { throw new Error("codec2 exit " + c); },
+    random_get: (p, n) => { crypto.getRandomValues(new Uint8Array(mem.buffer, p, n)); return 0; },
+  };
+  const { instance } = await WebAssembly.instantiate(bytes, { wasi_snapshot_preview1: wasi });
+  const e = instance.exports; mem = e.memory; if (e._initialize) e._initialize();
+  const st0 = e.c2_new(), N = e.c2_samples(st0), B = e.c2_bytes(st0), pcmP = e.buf_new(N * 2), bitP = e.buf_new(B);
+  e.c2_free(st0);                              // Each clip gets a fresh Codec2 state, because the state remembers past frames.
+  C2 = {
+    N, B,
+    encode(pcm) {                              // Int16Array at 8 kHz -> Uint8Array, 6 bytes per 40 ms.
+      const frames = Math.floor(pcm.length / N), out = new Uint8Array(frames * B);
+      const st = e.c2_new();
+      for (let f = 0; f < frames; f++) {
+        new Int16Array(e.memory.buffer, pcmP, N).set(pcm.subarray(f * N, f * N + N));
+        e.c2_enc(st, bitP, pcmP);
+        out.set(new Uint8Array(e.memory.buffer, bitP, B), f * B);
+      }
+      e.c2_free(st); return out;
+    },
+    decode(bits) {                             // Uint8Array -> Int16Array at 8 kHz.
+      const frames = Math.floor(bits.length / B), out = new Int16Array(frames * N);
+      const st = e.c2_new();
+      for (let f = 0; f < frames; f++) {
+        new Uint8Array(e.memory.buffer, bitP, B).set(bits.subarray(f * B, f * B + B));
+        e.c2_dec(st, pcmP, bitP);
+        out.set(new Int16Array(e.memory.buffer, pcmP, N), f * N);
+      }
+      e.c2_free(st); return out;
+    },
+  };
+  return C2;
+}
+function wav8k(pcm) {                          // Int16Array at 8 kHz mono -> a .wav file, which every browser can play.
+  const b = new ArrayBuffer(44 + pcm.length * 2), v = new DataView(b), s = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  s(0, "RIFF"); v.setUint32(4, 36 + pcm.length * 2, true); s(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); s(36, "data"); v.setUint32(40, pcm.length * 2, true);
+  new Int16Array(b, 44).set(pcm); return b;
+}
+const aadVoice = (fb, fp, tb, tp) => enc.encode(fb + fp + ">" + tb + tp + "|voice");   // A clip cannot pass as a text, or a text as a clip.
+function e2eEnds(m) {                          // Who sent it and who gets it, as the sender encrypted it.
+  const sent = !!m.local && m.from_pid === (ID && ID.pid), here = m.peer === myBox();
+  return { sent, fb: here ? myBox() : (sent ? myBox() : m.peer), tb: here ? myBox() : (sent ? m.peer : myBox()), other: { box: m.peer, pid: sent ? m.to_pid : m.from_pid } };
+}
+async function sendE2EVoice(pcm, secs) {      // pcm: Int16Array at 8 kHz.
+  const p = personOf(current);
+  if (!ID) { toast("This browser can't lock messages. Update it (Chrome 133+ or iOS 17+)"); return; }
+  if (!p.pub) { toast("Don't know " + p.name + "'s key yet, try again in a minute"); return; }
+  const c2 = await codec2();
+  const bits = c2.encode(pcm.subarray(0, Math.min(pcm.length, 10 * 8000)));
+  if (bits.length < 13 * c2.B) { toast("Hold the 🎤 while you talk"); return; }
+  const iv = crypto.getRandomValues(new Uint8Array(12)), key = await personKey(p.box, p.pid, p.pub);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: aadVoice(myBox(), ID.pid, p.box, p.pid) }, key, bits));
+  const blob = new Uint8Array(12 + ct.length); blob.set(iv); blob.set(ct, 12);
+  const q = new URLSearchParams({ to_box: p.box, to_pid: p.pid, from_pid: ID.pid, secs: String(secs) });
+  const r = await sendPerson(() => fetch("/api/pvoice?" + q, { method: "POST", body: blob, headers: { "Content-Type": "application/octet-stream" } }));
+  if (!r.ok) toast(await r.text()); else { poll(); return true; }
+}
+async function openE2EVoice(m) {               // Fetches the encrypted clip, decrypts it and decompresses it into a .wav.
+  const { fb, tb, other } = e2eEnds(m);
+  let p = people.find(x => x.box === other.box && x.pid === other.pid);
+  if (!p) { await loadPeople(); p = people.find(x => x.box === other.box && x.pid === other.pid); }
+  if (!p || !ID) throw new Error("NoKey");
+  const r = await fetch("/api/voice?id=" + m.id);
+  if (!r.ok) throw new Error(r.status === 404 ? "Gone" : "Busy");
+  const raw = new Uint8Array(await r.arrayBuffer()), key = await personKey(p.box, p.pid, p.pub);
+  const bits = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12), additionalData: aadVoice(fb, m.from_pid, tb, m.to_pid) }, key, raw.slice(12)));
+  return wav8k((await codec2()).decode(bits));
+}
+
+async function safetyCode(p) {                 // 4 digits from both public keys: the same keys give the same code.
+  const ab = [ID.pub, p.pub].sort().join("");
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", unhex(ab)));
+  return String(((h[0] << 8) | h[1]) % 10000).padStart(4, "0");
+}
+
+// ---------- Messages ----------
+// The status goes: sending -> sent (it left the radio) -> "1 of 2" (some boxes answered) ->
+// delivered (all boxes answered).
+function tick(m) {
+  if (m.st === "delivered") return " · ✓✓ delivered";
+  if (m.st === "sent" && m.acks > 0) return " · ✓✓ " + m.acks + " of " + m.need;
+  if (m.st === "sent") return " · ✓ sent";
+  if (m.st === "fail") return " · ⚠️ not delivered";
+  return " · sending…";
+}
+let next = 0, boot = null;                     // The page asks the box for messages newer than "next".
+const seen = {};                               // Message id -> time first seen on this phone.
+const all = [];                                // Every message of every chat (the box keeps the last 150).
+let groups = [], me = "";
+let current = null;                            // The open chat: "all", "p:AAAA" (private) or "g:3fa9" (group).
+const unread = {};
+const groupNames = {};                         // "g:3fa9" -> "Hikers", kept after leaving the group.
+function chatOf(m) {
+  if (m.e2e) {                                 // A person chat is "u:box:pid" of the other phone.
+    const sent = !!m.local && ID && m.from_pid === ID.pid;
+    return "u:" + m.peer + ":" + (sent ? m.to_pid : m.from_pid);
+  }
+  return m.group ? "g:" + m.group : m.peer ? "p:" + m.peer : "all";
+}
+function friendName(id) { const f = allFriends.find(f => f.id === id) || lastPeers.find(p => p.id === id); return f ? f.devicename : "Box " + id; }
+function chatTitle(c) {
+  if (c === "all") return "Everyone";
+  if (c.startsWith("p:")) return friendName(c.slice(2));
+  if (c.startsWith("u:")) return personOf(c).name;
+  const g = groups.find(g => g.gid === c.slice(2)); return g ? g.name : (groupNames[c] || "Group " + c.slice(2));
+}
+function chatAvatar(c, small) {
+  if (c === "all") { const a = avatar("Everyone", small, "everyone"); a.style.background = "var(--accent)"; a.style.color = "var(--on-accent)"; return a; }
+  if (c.startsWith("g:")) return avatar(chatTitle(c), small, "group");
+  if (c.startsWith("u:")) { const a = avatar(chatTitle(c), small); if (personOf(c).online) a.appendChild(el("span", "live")); return a; }
+  const a = avatar(chatTitle(c), small);
+  const p = lastPeers.find(p => p.id === c.slice(2));
+  if (p && p.age_s <= 45) a.appendChild(el("span", "live"));   // A green dot means the box is in range now.
+  return a;
+}
+function mine(m) { return m.e2e ? !!(m.local && ID && m.from_pid === ID.pid) : m.local && m.from === getName(); }   // True when this phone's user wrote the message.
+function preview(m) {
+  const t = m.voice ? "🎤 Voice message" : m.text;
+  if (mine(m)) return "You: " + t;
+  return /^[pu]:/.test(chatOf(m)) ? t : m.from + ": " + t;   // A private chat needs no name.
+}
+function chatIds() {                           // Every chat to list: Everyone, groups, friends and old ones.
+  const ids = ["all"];
+  for (const g of groups) { ids.push("g:" + g.gid); groupNames["g:" + g.gid] = g.name; }
+  for (const f of friends) ids.push("p:" + f.id);
+  for (const p of people) if (!(ID && p.box === myBox() && p.pid === ID.pid)) ids.push("u:" + p.box + ":" + p.pid);   // People, except this phone's user.
+  for (const m of all) { const c = chatOf(m); if (!ids.includes(c)) ids.push(c); }   // A chat that is gone keeps its messages.
+  return ids;
+}
+function lastOf(c) { for (let i = all.length - 1; i >= 0; i--) if (chatOf(all[i]) === c && !cleared(all[i])) return all[i]; return null; }
+
+// ---------- Hide or remove a chat (hold it on the chat list) ----------
+// The choice is kept on this phone only (localStorage key "hidden").
+//  Hide   = off the list until a new message comes in; the old messages are still there.
+//  Remove = the same, and its old messages are gone from this phone.
+// "cut" is the box's newest message id in that chat at the time it was hidden. The box numbers from 1
+// again after a restart; the page then sets old messages to id 0, so id 0 means "from an older boot".
+let hidden = {}; try { hidden = JSON.parse(localStorage.getItem("hidden") || "{}") || {}; } catch (e) {}
+function saveHidden() { try { localStorage.setItem("hidden", JSON.stringify(hidden)); } catch (e) {} }
+function isOld(m, h) { return h.boot === boot ? m.id > 0 && m.id <= h.cut : !m.id; }
+function cleared(m) { const h = hidden[chatOf(m)]; return !!(h && h.clear && isOld(m, h)); }
+function isHidden(c) {
+  const h = hidden[c]; if (!h || h.show) return false;
+  const m = lastOf(c);
+  if (m && !isOld(m, h)) {                     // A new message shows the chat again.
+    if (h.clear) h.show = true; else delete hidden[c];
+    saveHidden(); return false;
+  }
+  return true;
+}
+function hideChat(c, clear) {
+  let cut = 0; for (const m of all) if (chatOf(m) === c && m.id > cut) cut = m.id;
+  hidden[c] = { boot, cut, clear: !!clear, show: c === "all" };   // Everyone always stays on the list.
+  saveHidden(); drawHome();
+  toast(c === "all" ? "Cleared on this phone" : "Hidden. It comes back with a new message");
+}
+function chatMenu(c) {
+  if (c === "all") return actions(chatTitle(c), [{ label: "Clear messages on this phone", red: true, fn: () => hideChat(c, true) }]);
+  actions(chatTitle(c), [
+    { label: "Hide chat", fn: () => hideChat(c, false) },
+    { label: "Remove chat from this phone", red: true, fn: () => hideChat(c, true) },
+  ]);
+}
+// ---------- Unsend (hold your own message, or Chat info > Unsend all) ----------
+// The box removes the message and tells the other boxes in range by radio, twice. A box that is out
+// of range keeps it, and unsending cannot undo that someone already read it.
+function dropMessage(id) {                     // Takes one message off this phone's screen.
+  const i = all.findIndex(m => m.id === id); if (i >= 0) all.splice(i, 1);
+  const meta = $("meta" + id); if (meta) meta.parentElement.remove();
+}
+async function unsend(ids) {
+  let n = 0;
+  for (let k = 0; k < ids.length; k += 16) {   // The box takes 16 ids at a time.
+    const body = new URLSearchParams({ ids: ids.slice(k, k + 16).join(","), from: getName(), pid: ID ? ID.pid : "" });
+    for (let tries = 0; ; tries++) {
+      let r = null;
+      try { r = await fetch("/api/unsend", { method: "POST", body }); } catch (e) {}
+      if (r && r.ok) { n += (await r.json()).n; ids.slice(k, k + 16).forEach(dropMessage); break; }
+      if (r && r.status === 500 && tries < 3) { await new Promise(ok => setTimeout(ok, 3500)); continue; }   // The radio is busy: wait and try again.
+      toast(r ? await r.text() : "Not unsent: no connection to box"); return;
+    }
+  }
+  if (topView() === "vHome") drawHome();
+  toast(n ? (n === 1 ? "Unsent" : n + " messages unsent") : "Nothing to unsend");
+}
+function messageMenu(m) {
+  actions("Your message", [{ label: "Unsend", red: true, fn: () => unsend([m.id]) }]);
+}
+function showHiddenMenu(list) {
+  actions("Hidden chats", list.map(c => ({ label: "Show " + chatTitle(c), fn: () => { delete hidden[c]; saveHidden(); drawHome(); } })));
+}
+
+// ---------- Home screen ----------
+function drawHome() {
+  // The row of boxes in range.
+  const nb = $("nearby"); nb.textContent = "";
+  for (const p of lastPeers) {
+    const b = el("button", "near"), a = avatar(p.devicename);
+    if (p.age_s <= 45) a.appendChild(el("span", "live"));
+    b.appendChild(a); b.appendChild(el("span", "", p.devicename));
+    b.onclick = () => askFriend(p);
+    nb.appendChild(b);
+  }
+  nb.style.display = lastPeers.length ? "" : "none";
+  // Friend requests.
+  const rb = $("reqBanner"); rb.textContent = "";
+  const asks = allFriends.filter(f => f.state === "asks_you");
+  if (asks.length) {
+    const b = el("button", "banner");
+    b.appendChild(ic("friends"));
+    const t = el("span", "", asks.length === 1 ? asks[0].devicename + " wants to be friends. " : asks.length + " boxes want to be friends. ");
+    t.appendChild(el("b", "", "See")); b.appendChild(t);
+    b.onclick = () => go("vFriends"); rb.appendChild(b);
+  }
+  if (!canLock() && friends.length) {        // Chats with people need the https page.
+    const b = el("button", "banner"); b.appendChild(ic("lock"));
+    const t = el("span", "", "To chat privately with people on friend boxes, open the secure page. "); t.appendChild(el("b", "", "Open")); b.appendChild(t);
+    b.onclick = openSecure; rb.appendChild(b);
+  }
+  // The chats: Everyone first, then the newest first.
+  const list = $("chatList"); list.textContent = "";
+  const ids = chatIds();
+  const when = (c) => { const m = lastOf(c); return m ? (seen[m.id] || m.t || 0) : -1; };
+  const rest = ids.filter(c => c !== "all").sort((a, b) => when(b) - when(a) || chatTitle(a).localeCompare(chatTitle(b)));
+  const hid = rest.filter(isHidden);
+  for (const c of ["all", ...rest]) {
+    if (hid.includes(c)) continue;
+    const m = lastOf(c), n = unread[c] || 0;
+    const row = el("button", "crow" + (n ? " new" : ""));
+    row.appendChild(chatAvatar(c));
+    const mid = el("div", "mid");
+    mid.appendChild(el("div", "name", chatTitle(c)));
+    mid.appendChild(el("div", "last", m ? preview(m) : c === "all" ? "Everyone in range can read this" : c.startsWith("g:") ? "Group · say hi" : c.startsWith("u:") ? "🔐 on " + boxName(personOf(c).box) : "🔒 Private · say hi"));
+    row.appendChild(mid);
+    const side = el("div", "side");
+    if (m) side.appendChild(el("span", "time", clock(seen[m.id] || m.t || Date.now())));
+    if (n) side.appendChild(el("span", "badge", n));
+    row.appendChild(side);
+    row.onclick = () => openChat(c);
+    longPress(row, () => chatMenu(c));
+    list.appendChild(row);
+  }
+  if (hid.length) { const b = el("button", "showHidden", "Hidden chats (" + hid.length + ")"); b.onclick = () => showHiddenMenu(hid); list.appendChild(b); }
+  if (!friends.length && !groups.length) {
+    const e = el("div", "empty");
+    e.append("Want private chats? Tap a box at the top, or ", );
+    const a = el("b", "", "Menu → Friend boxes"); a.style.color = "var(--accent)"; e.appendChild(a); e.append(".");
+    list.appendChild(e);
+  }
+}
+$("newBtn").onclick = () => go("vNew");
+
+// ---------- New message ----------
+function openSecure() {
+  if (confirm("Open the secure page? Your phone will warn that it's \"not private\": that's OK for this box, tap Advanced / Show details, then visit.")) location.href = "https://" + location.host + "/";
+}
+function drawNew() {
+  const box = $("newBody"); box.textContent = "";
+  const action = (icon, text, fn) => { const r = el("button", "crow"); const a = avatar(text, true, icon); a.style.background = "var(--soft)"; a.style.color = "var(--accent)"; r.appendChild(a); r.appendChild(el("div", "mid name", text)); r.onclick = fn; box.appendChild(r); };
+  action("group", "New group", () => { if (!friends.length) { toast("Add a friend box first"); go("vFriends"); return; } newGroup(); });
+  action("friends", "Add a friend box", () => { stack.pop(); stack.push("vFriends"); history.replaceState({ n: stack.length }, ""); render(true); });
+  box.appendChild(el("div", "sec", "Send to"));
+  for (const c of chatIds().filter(c => c === "all" || groups.some(g => "g:" + g.gid === c) || friends.some(f => "p:" + f.id === c) || (c.startsWith("u:") && personOf(c).pub))) {
+    const r = el("button", "crow"); r.appendChild(chatAvatar(c, true));
+    const mid = el("div", "mid"); mid.appendChild(el("div", "name", chatTitle(c)));
+    mid.appendChild(el("div", "last", c === "all" ? "Every box in range" : c.startsWith("g:") ? "Group" : c.startsWith("u:") ? "🔐 on " + boxName(personOf(c).box) : "🔒 Private · whole box"));
+    r.appendChild(mid);
+    r.onclick = () => { stack.pop(); openChat(c, false, true); };
+    box.appendChild(r);
+  }
+}
+
+// ---------- One chat ----------
+function openChat(c, redrawOnly, replace) {
+  current = c; unread[c] = 0;
+  $("chatTitle").textContent = chatTitle(c);
+  $("chatAv").replaceChildren(chatAvatar(c, true));
+  drawSub();
+  $("list").textContent = "";
+  const msgs = all.filter(m => chatOf(m) === c && !cleared(m));
+  if (!msgs.length) {
+    const e = el("div", "empty"); e.id = "empty";
+    e.append("No messages yet."); e.appendChild(el("br"));
+    e.append(c === "all" ? "Say hi to everyone in range 👋" : c.startsWith("g:") ? "Say hi to the group 👋" : c.startsWith("u:") ? "Only " + chatTitle(c) + "'s phone can open these 🔐" : "Only you two boxes can read this 🔒");
+    $("list").appendChild(e);
+  }
+  for (const m of msgs) drawBubble(m);
+  $("msg").placeholder = c === "all" ? "Message everyone" : "Message " + chatTitle(c);
+  $("micBtn").style.display = "";             // Voice works in every chat (to a person it is end-to-end, see sendE2EVoice).
+  if (c.startsWith("u:")) codec2().catch(() => {});   // Fetches Codec2 early so the first clip is quick.
+  $("msg").maxLength = c.startsWith("u:") ? 100 : 150;
+  if (c.startsWith("u:") && !canLock()) openSecure();
+  if (redrawOnly) return;
+  if (replace) { stack.push("vChat"); history.replaceState({ n: stack.length }, ""); render(true); }
+  else if (topView() !== "vChat") go("vChat");
+}
+function drawSub() {
+  const c = current, s = $("chatSub"); if (!c) return;
+  if (c === "all") s.textContent = (lastPeers.length ? lastPeers.length + (lastPeers.length === 1 ? " box" : " boxes") + " in range" : "No boxes in range") + (locked ? " · 🔒 locked network" : " · not private");
+  else if (c.startsWith("u:")) { const p = personOf(c); s.textContent = "🔐 End-to-end · on " + boxName(p.box) + (p.online ? " · active now" : ""); }
+  else if (c.startsWith("p:")) { const p = lastPeers.find(p => p.id === c.slice(2)); s.textContent = "🔒 Private" + (p && p.age_s <= 45 ? " · in range" : " · not in range"); }
+  else { const g = groups.find(g => g.gid === c.slice(2)); s.textContent = g ? g.members.length + 1 + " boxes · 🔒 only they can read" : "You left this group"; }
+}
+$("infoBtn").onclick = () => go("vInfo");
+function drawInfo() {
+  const c = current, box = $("infoBody"); box.textContent = ""; if (!c) return;
+  $("infoTitle").textContent = chatTitle(c);
+  const head = el("div", "empty"); const a = chatAvatar(c); a.style.margin = "0 auto 8px"; a.style.width = a.style.height = "72px"; a.style.fontSize = "28px";
+  head.appendChild(a); head.appendChild(el("div", "", c === "all" ? "Every box in range can read these messages." : c.startsWith("u:") ? "🔐 Encrypted on your phone for " + chatTitle(c) + "'s phone. The boxes pass it on without the key." : c.startsWith("p:") ? "🔒 Encrypted between your box and " + chatTitle(c) + ". Everyone on either box's Wi-Fi can read it." : "🔒 Encrypted with the key that the boxes in this group share."));
+  box.appendChild(head);
+  const card = el("div", "card"), add = (r) => card.appendChild(r);
+  const btn = (text, fn, red) => { const b = el("button", "btn ghost" + (red ? " red" : ""), text); b.onclick = fn; return b; };
+  const mineHere = all.filter(m => chatOf(m) === c && m.id && mine(m)).map(m => m.id);
+  if (mineHere.length) box.appendChild(btn("Unsend all my messages (" + mineHere.length + ")", () =>
+    actions("Unsend " + mineHere.length + " message" + (mineHere.length === 1 ? "" : "s") + "?",
+      [{ label: "Unsend all", red: true, fn: () => unsend(mineHere).then(() => { if (topView() === "vInfo") drawInfo(); }) }]), true));
+  if (c === "all") {
+    box.appendChild(el("div", "group-title", "In range now"));
+    for (const p of lastPeers) add(friendRow(p.devicename, isFriend(p.id) ? "Friend" : "Not a friend", isFriend(p.id) ? [["Message", () => openChat("p:" + p.id)]] : [["Add friend", () => askFriend(p)]]));
+    if (!lastPeers.length) add(friendRow("No boxes in range", "", []));
+    box.appendChild(card);
+    if (!locked) box.appendChild(el("div", "note", "Tip: lock your network (Menu → Network lock) so boxes without your passphrase can't read Everyone messages."));
+  } else if (c.startsWith("u:")) {
+    const p = personOf(c);
+    add(friendRow("Uses", boxName(p.box) + (p.online ? " · active now" : ""), []));
+    if (ID && p.pub) {
+      const row = friendRow("Safety code", "Compare with " + p.name + ": the same code means the keys match", []); add(row);
+      safetyCode(p).then(code => row.appendChild(el("b", "", code)));
+    }
+    box.appendChild(card);
+  } else if (c.startsWith("p:")) {
+    const f = allFriends.find(f => f.id === c.slice(2));
+    const on = people.filter(p => p.box === c.slice(2));
+    if (on.length) {
+      box.appendChild(el("div", "group-title", "People on this box"));
+      const pc = el("div", "card");
+      for (const p of on) pc.appendChild(friendRow(p.name, p.online ? "Active now" : "Not active", [["Message", () => openChat("u:" + p.box + ":" + p.pid)]]));
+      box.appendChild(pc);
+      box.appendChild(el("div", "group-title", "Box"));
+    }
+    if (f) { add(friendRow("Safety code", "The same code on both phones means the keys match", [])); card.lastChild.appendChild(el("b", "", f.code)); box.appendChild(card);
+      box.appendChild(btn("Remove friend", () => { if (confirm("Remove " + f.devicename + "?")) { friendDo("remove", f.id); back(); } }, true)); }
+    else box.appendChild(el("div", "note", "This box is not your friend any more."));
+  } else {
+    const g = groups.find(g => g.gid === c.slice(2));
+    if (!g) { box.appendChild(el("div", "note", "You left this group.")); return; }
+    box.appendChild(el("div", "group-title", "Members"));
+    add(friendRow("You", g.owner === me ? "Made the group" : "", []));
+    for (const id of g.members) if (id !== me) add(friendRow(friendName(id), id === g.owner ? "Made the group" : "", []));
+    if (g.owner !== me && !g.members.includes(g.owner)) add(friendRow(friendName(g.owner), "Made the group", []));
+    box.appendChild(card);
+    if (g.owner === me) box.appendChild(btn("Send the key again", () => groupDo({ do: "resend", gid: g.gid }, "Sending the key again")));
+    box.appendChild(btn("Leave group", () => { if (confirm("Leave " + g.name + "? You won't get its messages any more.")) groupDo({ do: "delete", gid: g.gid }, "Left " + g.name).then(() => back()); }, true));
+  }
+}
+
+// ---------- Groups ----------
+async function loadGroups() {
+  try { const j = await (await fetch("/api/groups")).json(); groups = j.groups; me = j.me; drawHome(); drawSub(); } catch (e) {}
+}
+async function groupDo(body, ok) {
+  try {
+    const r = await fetch("/api/groups", { method: "POST", body: new URLSearchParams(body) });
+    if (!r.ok) { toast(await r.text()); return false; }
+    const j = await r.json(); groups = j.groups; me = j.me;
+    if (ok) toast(ok);
+    drawHome(); drawSub(); return j;
+  } catch (e) { toast("Box not answering"); return false; }
+}
+function newGroup() {
+  const box = $("groupPicks"); box.textContent = "";
+  for (const f of friends) {
+    const l = el("label", "pick"); l.appendChild(avatar(f.devicename, true)); l.append(f.devicename);
+    const cb = el("input"); cb.type = "checkbox"; cb.value = f.id; l.appendChild(cb); box.appendChild(l);
+  }
+  $("groupName").value = "";
+  stack.pop(); stack.push("vGroup"); history.replaceState({ n: stack.length }, ""); render(true);   // This screen replaces "New message".
+  $("groupName").focus();
+}
+$("groupMake").onclick = async () => {
+  const name = clean($("groupName").value);
+  const ids = [...$("groupPicks").querySelectorAll("input:checked")].map(i => i.value);
+  if (!name) { toast("Give the group a name"); return; }
+  if (!ids.length) { toast("Pick at least one box"); return; }
+  const before = new Set(groups.map(g => g.gid));
+  const j = await groupDo({ do: "create", name, members: ids.join(",") }, "Group made. Sending the key…");
+  if (!j) return;
+  const g = j.groups.find(g => !before.has(g.gid));
+  stack.pop();                                 // The chat takes the place of "New group".
+  if (g) openChat("g:" + g.gid, false, true); else { history.replaceState({ n: stack.length }, ""); render(false); }
+};
+
+function addMessage(m) {                       // Keeps a new message, and draws it if its chat is open.
+  all.push(m);
+  const c = chatOf(m);
+  if (c.startsWith("g:") && !groups.some(g => g.gid === m.group)) loadGroups();   // The box just joined this group.
+  if (c === current) drawBubble(m);
+  if (!(c === current && topView() === "vChat") && !mine(m)) unread[c] = (unread[c] || 0) + 1;
+}
+function drawBubble(m) {
+  if ($("empty")) $("empty").remove();
+  const my = mine(m);
+  const row = el("div", "row " + (my ? "me" : "them"));
+  if (!my && current !== "p:" + m.peer) row.appendChild(el("div", "who", m.from + (m.local ? "" : " · " + (m.devicename || "LoRa"))));   // The sender's name, then the box name.
+  else if (!my) row.appendChild(el("div", "who", m.from));
+  const b = el("div", "bubble");
+  if (m.voice) {
+    const pb = el("button", "play"); pb.append(ic("play"), " Voice · " + m.voice + " s");
+    pb.onclick = () => playVoice(m, pb); b.appendChild(pb);
+  } else b.textContent = m.text;               // textContent, never innerHTML, so message text is not parsed as HTML.
+  row.appendChild(b);
+  const meta = el("div", "meta", clock(seen[m.id] || Date.now()) + (my ? tick(m) : ""));
+  if (m.id) meta.id = "meta" + m.id;
+  row.appendChild(meta);
+  if (my && m.id) longPress(b, () => messageMenu(m));   // Only on your own messages, and only once the box has them.
+  $("list").appendChild(row);
+  $("list").scrollTop = $("list").scrollHeight;
+}
+
+// ---------- Boxes in range ----------
+// Turns SNR into 1 to 4 bars. "floor" is the weakest SNR the radio can still decode at this SF.
+function snrBars(snr, sf) {
+  const floor = -7.5 - 2.5 * (sf - 7);
+  if (snr > 5) return 4; if (snr > 0) return 3; if (snr > floor + 5.5) return 2; return 1;
+}
+let lastPeers = [], lastSf = 9;
+function barsEl(p) {
+  const bars = el("span", "bars"), n = p.age_s <= 45 ? snrBars(p.snr, lastSf) : 0;
+  for (let i = 0; i < 4; i++) bars.appendChild(el("i", i < n ? "on" : ""));
+  if (n === 1) bars.classList.add("weak");
+  return bars;
+}
+function drawNear() {
+  const box = $("nearList"); box.textContent = "";
+  for (const p of lastPeers) {
+    const row = friendRow(p.devicename, p.rssi + " dBm · SNR " + p.snr + " dB · heard " + p.age_s + " s ago",
+      isFriend(p.id) ? [["Message", () => openChat("p:" + p.id)]] : [["Add friend", () => askFriend(p)]]);
+    row.firstChild.prepend(barsEl(p), " ");
+    box.appendChild(row);
+  }
+  if (!lastPeers.length) box.appendChild(friendRow("No boxes in range", "Turn on another box nearby", []));
+}
+function showPeers(j) {
+  const before = JSON.stringify(lastPeers.map(p => [p.id, p.age_s <= 45, p.snr]));
+  lastPeers = (j && j.peers) || []; if (j) lastSf = j.sf;
+  $("dot").classList.toggle("on", !!j);
+  $("status").textContent = !j ? "Not connected to your box" : lastPeers.length ? lastPeers.length + (lastPeers.length === 1 ? " box" : " boxes") + " in range" : "No other boxes in range";
+  $("mNear").textContent = lastPeers.length || "";
+  const changed = before !== JSON.stringify(lastPeers.map(p => [p.id, p.age_s <= 45, p.snr]));
+  if (changed) { if (topView() === "vHome") drawHome(); if (topView() === "vNear") drawNear(); drawSub(); }
+}
+async function poll() {
+  try {
+    const r = await fetch("/api/messages?since=" + next + "&t=" + Math.floor(Date.now() / 1000) + (ID ? "&pid=" + ID.pid : ""));   // t sends the time: the box has no clock.
+    const j = await r.json();
+    if (boot !== null && j.boot !== boot) {    // The box restarted: its message ids start again at 1.
+      for (const k in seen) delete seen[k];
+      all.forEach(m => m.id = 0);
+      document.querySelectorAll("[id^=meta]").forEach(e => e.removeAttribute("id"));
+      boot = j.boot; next = 0;
+      register(); loadPeople();                // The box's people list was in RAM: register again now, not in a minute.
+      return poll();
+    }
+    boot = j.boot;
+    let added = false;
+    for (const m of j.msgs) {
+      if (seen[m.id]) {                        // Already drawn: only the tick can change.
+        const old = all.find(o => o.id === m.id); if (old) { if (m.e2e) { m.text = old.text; m.from = old.from; } Object.assign(old, m); }
+        const meta = $("meta" + m.id);
+        if (meta && mine(m)) meta.textContent = meta.textContent.split(" · ")[0] + tick(m);
+      } else {
+        if (m.e2e) await openE2E(m);           // Decrypts it on this phone.
+        if (seen[m.id]) continue;              // Another poll drew it during the decryption.
+        seen[m.id] = Date.now(); m.t = seen[m.id]; addMessage(m); lastActivity = Date.now(); added = true;
+      }
+    }
+    let dropped = false;
+    for (const id of j.gone || []) if (all.some(m => m.id === id)) { dropMessage(id); dropped = true; }   // Unsent by the writer.
+    if (dropped && topView() === "vHome") drawHome();
+    next = j.next;
+    showPeers(j);
+    if (added && topView() === "vHome") drawHome();
+  } catch (e) { showPeers(null); }
+}
+// Saves battery: polls every 1 s while chatting, every 4 s when quiet, and not at all when the screen is off.
+let lastActivity = Date.now(), timer = null;
+function schedule() {
+  clearTimeout(timer);
+  if (document.hidden || forgotten) return;   // After "Forget me" the polling stops.
+  const quiet = Date.now() - lastActivity > 60000;
+  timer = setTimeout(async () => { await poll(); schedule(); }, quiet ? 4000 : 1000);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); schedule(); });
+
+// ---------- Voice messages ----------
+// Hold the microphone button and talk (10 s at most), then let go to send. The browser allows the
+// microphone only on an https:// page, so on http:// the page offers to open the https:// page (one
+// "not private" warning per phone).
+let rec = null;
+// Playing downloads the whole clip first, then plays it with Web Audio. iPhone and iPad want byte
+// ranges for an <audio> tag that streams, and the box does not serve byte ranges. The AudioContext
+// is made inside the tap, as iOS requires.
+let actx = null;
+// Every clip is decompressed on this phone (Codec2 in WebAssembly): the box hands over the Codec2
+// bytes (?raw=1) instead of a .wav.
+async function playVoice(m, btn) {
+  const idle = () => { btn.replaceChildren(ic("play"), " Voice · " + m.voice + " s"); };
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state !== "running") actx.resume(); } catch (e) { actx = null; }
+  if (!m.id) { toast("That voice message is gone: the box restarted (it keeps clips in memory only)"); return; }
+  btn.replaceChildren(ic("clock"), " Loading…");
+  let wav;
+  try {
+    if (m.e2e) wav = await openE2EVoice(m);    // Encrypted on a phone: decrypt and decompress it here.
+    else {
+      const r = await fetch("/api/voice?id=" + m.id + "&raw=1");
+      if (!r.ok) throw new Error(r.status === 404 ? "Gone" : "Busy");
+      wav = wav8k((await codec2()).decode(new Uint8Array(await r.arrayBuffer())));
+    }
+  } catch (e) {
+    console.log("load voice", e);
+    toast(e.message === "Gone" ? "That voice message is gone (the box keeps the last 8)" : e.message === "Busy" ? "Box busy, try again"
+      : m.e2e ? "🔒 Can't open this voice message" : "Can't load this voice message (" + (e.message || e.name) + ")");
+    idle(); return;
+  }
+  try {                                        // First choice: Web Audio (works on iPhone and iPad when started in the tap).
+    if (!actx) throw new Error("no Web Audio");
+    const audio = await new Promise((ok, bad) => actx.decodeAudioData(wav.slice(0), ok, bad));
+    const src = actx.createBufferSource(); src.buffer = audio; src.connect(actx.destination);
+    src.onended = idle; btn.replaceChildren(ic("pause"), " Playing…"); src.start();
+  } catch (e1) {                               // Second choice: a normal audio player with the .wav.
+    console.log("webaudio", e1);
+    const url = URL.createObjectURL(new Blob([wav], { type: "audio/wav" })), a = new Audio(url);
+    a.onended = a.onerror = () => { idle(); URL.revokeObjectURL(url); };
+    try { btn.replaceChildren(ic("pause"), " Playing…"); await a.play(); }
+    catch (e2) { console.log("audio", e2); toast("Can't play this voice message (" + (e2.message || e2.name) + ")"); idle(); }
+  }
+}
+setTimeout(() => codec2().catch(() => {}), 4000);   // Fetches Codec2 early (then cached a week) so playing starts quickly.
+async function startRec() {
+  if (rec) return;
+  if (!getName()) return askName();
+  if (!window.isSecureContext || !navigator.mediaDevices) {
+    if (confirm("Voice needs the secure page. Open it now? Your phone will warn that it's \"not private\": that's OK for this box, tap Advanced / Show details, then visit.")) location.href = "https://" + location.host + "/";
+    return;
+  }
+  // iPhone and iPad give a page sound only if its audio starts inside the tap. The context is made and
+  // started here, before the "await" for the microphone ends the tap.
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  ctx.resume();
+  const r0 = rec = { chunks: [], rate: ctx.sampleRate, started: Date.now(), ctx };
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  } catch (e) { if (rec === r0) rec = null; ctx.close(); toast("Microphone not allowed (" + (e && e.name || "error") + ")"); console.log("mic", e); return; }
+  if (rec !== r0) { stream.getTracks().forEach(t => t.stop()); ctx.close(); return; }   // Released before the phone said yes.
+  rec.stream = stream;
+  if (ctx.state !== "running") await ctx.resume();
+  rec.started = Date.now();                    // The countdown and "too short" check start when the mic really does.
+  const src = ctx.createMediaStreamSource(rec.stream);
+  const node = ctx.createScriptProcessor(4096, 1, 1);
+  node.onaudioprocess = (e) => { if (rec) rec.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+  src.connect(node); node.connect(ctx.destination);
+  $("micBtn").classList.add("rec");
+  // The countdown shows people when to stop talking. It counts from when the microphone really starts.
+  const MAX_S = 10, t0 = Date.now();
+  const tickDown = () => {
+    if (rec !== r0) return;
+    const left = Math.max(0, Math.ceil(MAX_S - (Date.now() - t0) / 1000));
+    $("msg").placeholder = "🔴 Recording… " + left + " s left · let go to send";
+    $("count").textContent = left + " s"; $("count").classList.toggle("full", left <= 3);
+  };
+  tickDown(); rec.countdown = setInterval(tickDown, 250);
+  rec.timer = setTimeout(stopRec, MAX_S * 1000);
+}
+function to8k(chunks, rate) {                  // Phone sound (48000 Hz floats) -> 8000 Hz 16-bit.
+  const buf = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+  let o = 0; for (const c of chunks) { buf.set(c, o); o += c.length; }
+  const step = rate / 8000, n = Math.floor(buf.length / step), out = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    let s = 0, a = Math.floor(i * step), b = Math.floor((i + 1) * step);
+    for (let k = a; k < b; k++) s += buf[k];
+    out[i] = Math.max(-1, Math.min(1, s / (b - a))) * 32767;
+  }
+  return out;
+}
+async function stopRec() {
+  const r = rec; if (!r) return; rec = null;
+  clearTimeout(r.timer); clearInterval(r.countdown);
+  $("count").textContent = ""; $("count").classList.remove("full");
+  $("micBtn").classList.remove("rec");
+  $("msg").placeholder = current === "all" ? "Message everyone" : "Message " + chatTitle(current);
+  if (r.stream) r.stream.getTracks().forEach(t => t.stop());
+  if (r.ctx) r.ctx.close();
+  if (Date.now() - r.started < 1000 || !r.rate) { toast("Hold the 🎤 while you talk (1 s at least)"); return; }
+  const pcm = to8k(r.chunks, r.rate);
+  if (current.startsWith("u:")) {             // One person: compress and encrypt on this phone (end-to-end).
+    try { if (await sendE2EVoice(pcm, Math.max(1, Math.round(pcm.length / 8000)))) lastVoice = Date.now(); }
+    catch (e) { console.log("pvoice", e); toast("Not sent: " + (e.message || "no connection to box")); }
+    return;
+  }
+  const q = new URLSearchParams({ from: getName() });
+  if (current.startsWith("p:")) q.set("to", current.slice(2));
+  if (current.startsWith("g:")) q.set("group", current.slice(2));
+  // The phone compresses the clip (Codec2 in WebAssembly), so the box does no audio work. If Codec2
+  // cannot load, the raw sound goes to the box, which then compresses it.
+  const clip10 = pcm.subarray(0, Math.min(pcm.length, 10 * 8000));   // Never more than 10 s, whatever the phone's timing.
+  let body = clip10.slice().buffer;
+  try { body = (await codec2()).encode(clip10); q.set("codec2", "1"); }
+  catch (e) { console.log("codec2 not loaded, sending raw sound", e); }
+  try {
+    const res = await fetch("/api/voice?" + q, { method: "POST", body, headers: { "Content-Type": "application/octet-stream" } });
+    if (!res.ok) toast(await res.text()); else { lastVoice = Date.now(); poll(); }
+  } catch (e) { toast("Not sent: no connection to box"); }
+}
+// The box takes one voice clip per 30 s (VOICE_GAP_S), so the page says so before recording, not after.
+let lastVoice = 0;
+function voiceWait() { return Math.ceil((lastVoice + 30000 - Date.now()) / 1000); }
+// Pointer capture keeps the press on the button even if the finger slides off a little.
+// Without it, a small slide counts as a release and sends a 1 s clip.
+$("micBtn").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  const w = voiceWait(); if (w > 0) { toast("You can send voice again in " + w + " s"); return; }
+  try { $("micBtn").setPointerCapture(e.pointerId); } catch (_) {}
+  startRec();
+});
+["pointerup", "pointercancel"].forEach(ev => $("micBtn").addEventListener(ev, () => { if (rec) stopRec(); }));
+document.addEventListener("pointerup", () => { if (rec) stopRec(); });   // A release anywhere stops, if capture is not supported.
+$("micBtn").addEventListener("contextmenu", (e) => e.preventDefault());
+
+// ---------- Typing and sending ----------
+$("msg").oninput = () => {                     // Typing enables Send and shows "120/150" from 100 letters.
+  lastActivity = Date.now(); const n = $("msg").value.length;
+  const lim = $("msg").maxLength;
+  $("sendBtn").disabled = n === 0; $("count").textContent = n >= lim - 50 ? n + "/" + lim : "";
+  $("count").classList.toggle("full", n >= lim - 10);
+};
+// Sending can take a few seconds when the box is busy. The message shows at once, grayed and marked
+// "sending...", and more taps are ignored until the box answers, which prevents a double send.
+let sending = false;
+function pendingBubble(text) {
+  if ($("empty")) $("empty").remove();
+  const row = el("div", "row me pending");
+  row.appendChild(el("div", "bubble", text));
+  row.appendChild(el("div", "meta", "sending…"));
+  $("list").appendChild(row); $("list").scrollTop = $("list").scrollHeight;
+  return row;
+}
+$("compose").onsubmit = async (e) => {
+  e.preventDefault();
+  if (sending) return;
+  if (!getName()) return askName();
+  const text = clean($("msg").value); if (!text || !current) return;
+  sending = true; $("sendBtn").disabled = true;
+  const row = pendingBubble(text);
+  try {
+    if (current.startsWith("u:")) {           // A person: encrypt it here; the boxes carry it without the key.
+      try { if (await sendE2E(text) !== false) { $("msg").value = ""; $("msg").oninput(); await poll(); } }
+      catch (err) { toast("Not sent: " + (err.message || "no connection to box")); }
+      return;
+    }
+    $("msg").value = ""; $("msg").oninput(); $("sendBtn").disabled = true;
+    const body = { from: getName(), text };
+    if (current.startsWith("p:")) body.to = current.slice(2);
+    if (current.startsWith("g:")) body.group = current.slice(2);
+    try {
+      const r = await fetch("/api/send", { method: "POST", body: new URLSearchParams(body) });
+      if (!r.ok) { toast(await r.text()); $("msg").value = text; }   // Not sent: put the text back in the input.
+      await poll();
+    } catch (e) { toast("Not sent: no connection to box"); $("msg").value = text; }
+  } finally {
+    row.remove(); sending = false; $("msg").oninput();
+  }
+};
+
+// ---------- Start ----------
+if (!getName()) askName();
+showName(); drawHome();
+loadSettings(); loadFriends(); loadGroups(); loadLock();
+loadId().then(() => { loadPeople(); schedule(); poll(); });     // The phone's key loads first, so person messages open.
+setInterval(() => { if (!document.hidden) { loadFriends(); loadGroups(); loadPeople(); } }, 20000);   // Picks up a new friend, group or person.
+setInterval(() => { if (!document.hidden) register(); }, 60000);                                         // Registers with the box again every minute.
+</script>
+</body>
+</html>
